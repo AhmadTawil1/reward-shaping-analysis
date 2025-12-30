@@ -49,7 +49,7 @@ class MonteCarloAgent:
         Generate a single episode using the current policy.
 
         Returns:
-            episode (list): List of (state, action, reward)
+            episode (list): List of (state, action, shaped_reward, orig_reward, is_success)
         """
         episode = []
         state, _ = self.env.reset()
@@ -57,9 +57,14 @@ class MonteCarloAgent:
         done = False
         while not done:
             action = self.select_action(state)
-            next_state, reward, terminated, truncated, _ = self.env.step(action)
+            next_state, reward, terminated, truncated, info = self.env.step(action)
 
-            episode.append((state, action, reward))
+            # Extract original reward from info (for metrics)
+            orig_reward = info.get("orig_reward", reward)
+            is_success = info.get("is_success", False)
+
+            # Store: (state, action, shaped_reward, orig_reward, is_success)
+            episode.append((state, action, reward, orig_reward, is_success))
 
             state = next_state
             done = terminated or truncated
@@ -69,13 +74,63 @@ class MonteCarloAgent:
     def update_q(self, episode):
         """
         Update Q-values using Every-Visit Monte Carlo.
+
+        Uses SHAPED reward for learning (constant-α incremental update).
         """
         G = 0.0
 
-        # Compute returns backwards
+        # Walk episode backwards
         for t in reversed(range(len(episode))):
-            state, action, reward = episode[t]
-            G = reward + self.gamma * G
+            state, action, shaped_reward, _, _ = episode[t]
 
-            # Incremental MC update
-            self.q_table[state][action] += self.alpha * (G - self.q_table[state][action])
+            # Compute return
+            G = shaped_reward + self.gamma * G
+
+            # Incremental Every-Visit MC update
+            self.q_table[state][action] += self.alpha * (
+                G - self.q_table[state][action]
+            )
+
+    def train(self, num_episodes):
+        """
+        Train the agent for a given number of episodes.
+
+        Returns:
+            success_log (list): Binary success per episode
+            real_returns (list): Real (unshaped) return per episode
+            episode_lengths (list): Number of steps per episode
+        """
+        success_log = []
+        real_returns = []
+        episode_lengths = []
+
+        for ep in range(num_episodes):
+            # Generate episode
+            episode = self.generate_episode()
+
+            # Update Q-values
+            self.update_q(episode)
+
+            # Track metrics (using ORIGINAL rewards)
+            ep_length = len(episode)
+            ep_real_return = sum(step[3] for step in episode)  # orig_reward
+            ep_success = int(any(step[4] for step in episode))  # is_success
+
+            success_log.append(ep_success)
+            real_returns.append(ep_real_return)
+            episode_lengths.append(ep_length)
+
+        return success_log, real_returns, episode_lengths
+
+    def get_policy(self):
+        """
+        Extract greedy policy from Q-table.
+
+        Returns:
+            dict: {state: best_action}
+        """
+        policy = {}
+        for state in self.q_table.keys():
+            q_values = self.q_table[state]
+            policy[state] = np.argmax(q_values)
+        return policy

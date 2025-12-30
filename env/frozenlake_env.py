@@ -18,6 +18,58 @@ Used by:
 import numpy as np
 import gymnasium as gym
 import time
+from collections import deque
+
+
+
+def has_valid_path(grid_map: list[str]) -> bool:
+    """
+    Check whether a valid path exists from Start (S) to Goal (G)
+    while avoiding holes (H), using Breadth-First Search (BFS).
+
+    Args:
+        grid_map (list[str]): FrozenLake map representation.
+
+    Returns:
+        bool: True if a path exists, False otherwise.
+    """
+    grid_size = len(grid_map)
+
+    # Locate start and goal positions
+    start = None
+    goal = None
+
+    for i in range(grid_size):
+        for j in range(grid_size):
+            if grid_map[i][j] == "S":
+                start = (i, j)
+            elif grid_map[i][j] == "G":
+                goal = (i, j)
+
+    if start is None or goal is None:
+        return False
+
+    queue = deque([start])
+    visited = {start}
+
+    # Possible movements: up, down, left, right
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    while queue:
+        x, y = queue.popleft()
+
+        if (x, y) == goal:
+            return True
+
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+
+            if 0 <= nx < grid_size and 0 <= ny < grid_size:
+                if (nx, ny) not in visited and grid_map[nx][ny] != "H":
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
+
+    return False
 
 
 def generate_frozenlake_map(
@@ -26,7 +78,10 @@ def generate_frozenlake_map(
     seed: int = 42
 ) -> list[str]:
     """
-    Generate a random FrozenLake map.
+    Generate a random FrozenLake map with guaranteed reachability
+    from Start (S) to Goal (G).
+
+    The map is regenerated until at least one valid path exists.
 
     Args:
         grid_size (int): Size of the grid (grid_size x grid_size).
@@ -34,7 +89,7 @@ def generate_frozenlake_map(
         seed (int): Random seed for reproducibility.
 
     Returns:
-        List[str]: FrozenLake map layout.
+        list[str]: Valid FrozenLake map layout.
     """
     assert grid_size >= 2, "Grid size must be at least 2"
     assert 0.0 <= hole_density <= 0.2, "Hole density must be between 0.1 and 0.2"
@@ -44,38 +99,41 @@ def generate_frozenlake_map(
     num_cells = grid_size * grid_size
     num_holes = int(num_cells * hole_density)
 
-    # Initialize all cells as frozen
-    grid = np.full(num_cells, "F")
+    while True:
+        # Initialize all cells as frozen
+        grid = np.full(num_cells, "F")
 
-    # Define fixed start and goal positions
-    start_idx = 0
-    goal_idx = num_cells - 1
+        # Fixed start (top-left) and goal (bottom-right)
+        start_idx = 0
+        goal_idx = num_cells - 1
+        grid[start_idx] = "S"
+        grid[goal_idx] = "G"
 
-    grid[start_idx] = "S"
-    grid[goal_idx] = "G"
+        # Candidate positions for holes (exclude start and goal)
+        available_indices = [
+            i for i in range(num_cells)
+            if i not in (start_idx, goal_idx)
+        ]
 
-    # Available positions for holes (exclude start & goal)
-    available_indices = [
-        i for i in range(num_cells)
-        if i not in (start_idx, goal_idx)
-    ]
+        hole_indices = rng.choice(
+            available_indices,
+            size=num_holes,
+            replace=False
+        )
 
-    hole_indices = rng.choice(
-        available_indices,
-        size=num_holes,
-        replace=False
-    )
+        for idx in hole_indices:
+            grid[idx] = "H"
 
-    for idx in hole_indices:
-        grid[idx] = "H"
+        # Convert flat grid to list of strings
+        grid_map = [
+            "".join(grid[i * grid_size:(i + 1) * grid_size])
+            for i in range(grid_size)
+        ]
 
-    # Convert to FrozenLake string format
-    grid_map = [
-        "".join(grid[i * grid_size:(i + 1) * grid_size])
-        for i in range(grid_size)
-    ]
+        # Accept map only if a valid path exists
+        if has_valid_path(grid_map):
+            return grid_map
 
-    return grid_map
 
 
 def create_frozenlake_env(
@@ -108,6 +166,7 @@ def create_frozenlake_env(
         "FrozenLake-v1",
         desc=desc,
         is_slippery=is_slippery,
+        max_episode_steps=500,
         render_mode=render_mode
     )
 
@@ -123,7 +182,7 @@ if __name__ == "__main__":
     ## Test the environment
     env = create_frozenlake_env(
         grid_size=6,
-        hole_density=0.17,
+        hole_density=0.0,
         is_slippery=False,
         render_mode="human"
     )
