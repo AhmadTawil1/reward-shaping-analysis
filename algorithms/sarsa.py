@@ -2,6 +2,8 @@
 SARSA(0) implementation.
 
 On-policy TD control using ε-greedy action selection.
+
+UPDATED: Added optimistic initialization support
 """
 
 import numpy as np
@@ -9,7 +11,9 @@ from collections import defaultdict
 
 
 class SARSAAgent:
-    def __init__(self, env, epsilon=0.1, alpha=0.1, gamma=1.0):
+    def __init__(self, env, epsilon=0.1, alpha=0.1, gamma=1.0,
+                 epsilon_decay=1.0, epsilon_min=0.0,
+                 initial_q_value=0.0):
         """
         Initialize the SARSA agent.
 
@@ -18,13 +22,31 @@ class SARSAAgent:
             epsilon (float): Exploration probability
             alpha (float): Learning rate
             gamma (float): Discount factor
+            epsilon_decay (float): Multiplicative decay factor per episode (default: 1.0 = no decay)
+            epsilon_min (float): Minimum epsilon value (default: 0.0)
+            initial_q_value (float): Initial Q-value for all state-action pairs.
+                                     Use 0.0 for neutral, >0 for optimistic initialization.
+                                     Optimistic values (e.g., 0.5, 1.0) encourage exploration.
         """
         self.env = env
         self.epsilon = epsilon
         self.alpha = alpha
         self.gamma = gamma
+        
+        # Epsilon decay parameters
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
+        
+        # Optimistic initialization
+        self.initial_q_value = initial_q_value
 
-        self.q_table = defaultdict(lambda: np.zeros(self.env.action_space.n))
+        # Q-table with optimistic initialization if specified
+        if initial_q_value == 0.0:
+            self.q_table = defaultdict(lambda: np.zeros(self.env.action_space.n))
+        else:
+            self.q_table = defaultdict(
+                lambda: np.full(self.env.action_space.n, self.initial_q_value)
+            )
 
     def select_action(self, state):
         """
@@ -96,6 +118,9 @@ class SARSAAgent:
             success_log.append(ep_success)
             episode_lengths.append(step_count)
             real_returns.append(ep_real_return)
+            
+            # Apply epsilon decay
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         return success_log, real_returns, episode_lengths
 
@@ -111,3 +136,15 @@ class SARSAAgent:
             q_values = self.q_table[state]
             policy[state] = np.argmax(q_values)
         return policy
+    
+    def get_value_function(self):
+        """
+        Extract state value function V(s) from Q-table.
+        
+        Returns:
+            dict: {state: max_q_value}
+        """
+        value_func = {}
+        for state in self.q_table.keys():
+            value_func[state] = np.max(self.q_table[state])
+        return value_func
