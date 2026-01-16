@@ -19,12 +19,15 @@ def run_sarsa(
     num_episodes=1000,
     num_runs=5,
     shaping_type=None,
-    grid_size=6,
+    grid_rows=6,
+    grid_cols=6,
     hole_density=0.15,
     is_slippery=True,
+    success_rate=0.7,
     epsilon=0.1,
     alpha=0.1,
     gamma=1.0,
+    initial_q_value=0.0,
     shaping_params=None
 ):
     """
@@ -34,12 +37,15 @@ def run_sarsa(
         num_episodes (int): Number of training episodes
         num_runs (int): Number of independent runs
         shaping_type (str): None, 'step', 'potential', 'safety', 'exploration'
-        grid_size (int): Grid size
+        grid_rows (int): Number of rows in the grid
+        grid_cols (int): Number of columns in the grid
         hole_density (float): Hole density (0.1-0.2)
         is_slippery (bool): Slippery dynamics
+        success_rate (float): Action success rate when slippery (default: 0.7)
         epsilon (float): Exploration rate
         alpha (float): Learning rate
         gamma (float): Discount factor (should be 1.0 per project)
+        initial_q_value (float): Initial Q-value for optimistic initialization
         shaping_params (dict): Additional parameters for shaping (e.g., {'step_cost': -0.01})
     
     Returns:
@@ -55,11 +61,11 @@ def run_sarsa(
     print("SARSA HYPERPARAMETERS")
     print("="*60)
     print(f"Environment:")
-    print(f"  - Grid Size: {grid_size}x{grid_size}")
+    print(f"  - Grid Size: {grid_rows}x{grid_cols}")
     print(f"  - Hole Density: {hole_density}")
     print(f"  - Slippery: {is_slippery}")
     if is_slippery:
-        print(f"  - Success Rate: 0.7")
+        print(f"  - Success Rate: {success_rate}")
     print(f"\nTraining:")
     print(f"  - Episodes: {num_episodes}")
     print(f"  - Runs: {num_runs}")
@@ -99,11 +105,12 @@ def run_sarsa(
 
         # --- Create Base Environment ---
         env = create_frozenlake_env(
-            grid_size=grid_size,
+            rows=grid_rows,
+            cols=grid_cols,
             hole_density=hole_density,
             is_slippery=is_slippery,
             seed=seed,
-            success_rate=0.7
+            success_rate=success_rate
         )
 
         # --- Apply Reward Shaping (if specified) ---
@@ -128,7 +135,8 @@ def run_sarsa(
             env=env,
             epsilon=epsilon,
             alpha=alpha,
-            gamma=gamma
+            gamma=gamma,
+            initial_q_value=initial_q_value
         )
 
         # --- Train ---
@@ -153,7 +161,8 @@ if __name__ == "__main__":
         num_episodes=500,
         num_runs=3,
         shaping_type="exploration",
-        grid_size=6,
+        grid_rows=6,
+        grid_cols=6,
         hole_density=0.15,
         is_slippery=True
     )

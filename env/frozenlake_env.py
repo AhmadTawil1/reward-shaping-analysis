@@ -95,14 +95,15 @@ def has_valid_path(grid_map: list[str]) -> bool:
     Returns:
         bool: True if a path exists, False otherwise.
     """
-    grid_size = len(grid_map)
+    rows = len(grid_map)
+    cols = len(grid_map[0]) if rows > 0 else 0
 
     # Locate start and goal positions
     start = None
     goal = None
 
-    for i in range(grid_size):
-        for j in range(grid_size):
+    for i in range(rows):
+        for j in range(cols):
             if grid_map[i][j] == "S":
                 start = (i, j)
             elif grid_map[i][j] == "G":
@@ -126,7 +127,7 @@ def has_valid_path(grid_map: list[str]) -> bool:
         for dx, dy in directions:
             nx, ny = x + dx, y + dy
 
-            if 0 <= nx < grid_size and 0 <= ny < grid_size:
+            if 0 <= nx < rows and 0 <= ny < cols:
                 if (nx, ny) not in visited and grid_map[nx][ny] != "H":
                     visited.add((nx, ny))
                     queue.append((nx, ny))
@@ -134,8 +135,41 @@ def has_valid_path(grid_map: list[str]) -> bool:
     return False
 
 
+def get_adjacent_positions(idx: int, rows: int, cols: int) -> list[int]:
+    """
+    Get all adjacent positions (including diagonals) for a given cell index.
+    
+    Args:
+        idx (int): Flat index of the cell in the grid.
+        rows (int): Number of rows in the grid.
+        cols (int): Number of columns in the grid.
+    
+    Returns:
+        list[int]: List of adjacent cell indices.
+    """
+    row = idx // cols
+    col = idx % cols
+    
+    adjacent = []
+    # Check all 8 directions: up, down, left, right, and 4 diagonals
+    for dr in [-1, 0, 1]:
+        for dc in [-1, 0, 1]:
+            if dr == 0 and dc == 0:
+                continue  # Skip the cell itself
+            
+            new_row = row + dr
+            new_col = col + dc
+            
+            # Check if the new position is within bounds
+            if 0 <= new_row < rows and 0 <= new_col < cols:
+                adjacent.append(new_row * cols + new_col)
+    
+    return adjacent
+
+
 def generate_frozenlake_map(
-    grid_size: int,
+    rows: int,
+    cols: int,
     hole_density: float,
     seed: int = 42
 ) -> list[str]:
@@ -144,21 +178,23 @@ def generate_frozenlake_map(
     from Start (S) to Goal (G).
 
     The map is regenerated until at least one valid path exists.
+    Holes are not placed adjacent to the start or goal positions.
 
     Args:
-        grid_size (int): Size of the grid (grid_size x grid_size).
+        rows (int): Number of rows in the grid.
+        cols (int): Number of columns in the grid.
         hole_density (float): Fraction of holes (between 0.1 and 0.2).
         seed (int): Random seed for reproducibility.
 
     Returns:
         list[str]: Valid FrozenLake map layout.
     """
-    assert grid_size >= 2, "Grid size must be at least 2"
+    assert rows >= 2 and cols >= 2, "Grid must be at least 2x2"
     assert 0.1 <= hole_density <= 0.2, "Hole density must be between 0.1 and 0.2"
 
     rng = np.random.default_rng(seed)
 
-    num_cells = grid_size * grid_size
+    num_cells = rows * cols
     num_holes = round(num_cells * hole_density)
 
     while True:
@@ -171,15 +207,29 @@ def generate_frozenlake_map(
         grid[start_idx] = "S"
         grid[goal_idx] = "G"
 
-        # Candidate positions for holes (exclude start and goal)
+        # Get positions adjacent to start and goal
+        start_adjacent = get_adjacent_positions(start_idx, rows, cols)
+        goal_adjacent = get_adjacent_positions(goal_idx, rows, cols)
+        
+        # Combine all forbidden positions (start, goal, and their adjacent cells)
+        forbidden_indices = set([start_idx, goal_idx] + start_adjacent + goal_adjacent)
+
+        # Candidate positions for holes (exclude start, goal, and adjacent cells)
         available_indices = [
             i for i in range(num_cells)
-            if i not in (start_idx, goal_idx)
+            if i not in forbidden_indices
         ]
+
+        # Ensure we have enough available positions for the requested number of holes
+        if len(available_indices) < num_holes:
+            # If we can't place the requested number of holes, place as many as possible
+            num_holes_to_place = len(available_indices)
+        else:
+            num_holes_to_place = num_holes
 
         hole_indices = rng.choice(
             available_indices,
-            size=num_holes,
+            size=num_holes_to_place,
             replace=False
         )
 
@@ -188,8 +238,8 @@ def generate_frozenlake_map(
 
         # Convert flat grid to list of strings
         grid_map = [
-            "".join(grid[i * grid_size:(i + 1) * grid_size])
-            for i in range(grid_size)
+            "".join(grid[i * cols:(i + 1) * cols])
+            for i in range(rows)
         ]
 
         # Accept map only if a valid path exists
@@ -199,7 +249,8 @@ def generate_frozenlake_map(
 
 
 def create_frozenlake_env(
-    grid_size: int,
+    rows: int,
+    cols: int,
     hole_density: float,
     is_slippery: bool = True,
     success_rate: float = 0.7,
@@ -210,7 +261,8 @@ def create_frozenlake_env(
     Create a Gymnasium FrozenLake environment.
 
     Args:
-        grid_size (int): Size of the grid.
+        rows (int): Number of rows in the grid.
+        cols (int): Number of columns in the grid.
         hole_density (float): Fraction of holes.
         is_slippery (bool): Whether transitions are stochastic.
         success_rate (float): Probability of successful action when slippery (default: 0.7).
@@ -223,7 +275,8 @@ def create_frozenlake_env(
         gym.Env: Configured FrozenLake environment.
     """
     desc = generate_frozenlake_map(
-        grid_size=grid_size,
+        rows=rows,
+        cols=cols,
         hole_density=hole_density,
         seed=seed
     )
@@ -251,7 +304,8 @@ def create_frozenlake_env(
 if __name__ == "__main__":
     ## Test the environment
     env = create_frozenlake_env(
-        grid_size=6,
+        rows=6,
+        cols=6,
         hole_density=0.15,
         is_slippery=False,
         render_mode="human"

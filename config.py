@@ -9,8 +9,9 @@ All experiment scripts will use these settings.
 # ENVIRONMENT CONFIGURATION
 # ============================================================
 
-GRID_SIZE = 6         # Grid size (6, 7, 8, etc.)
-HOLE_DENSITY = 0.1    # Hole density (0.10 - 0.20)
+GRID_ROWS = 6         # Number of rows (6, 7, 8, etc.)
+GRID_COLS = 6         # Number of columns (6, 7, 8, etc.)
+HOLE_DENSITY = 0.15    # Hole density (0.10 - 0.20)
 IS_SLIPPERY = True    # Slippery dynamics (True = stochastic)
 SUCCESS_RATE = 0.7    # Action success rate when slippery (0.33 = default, 0.7 = easier)
 
@@ -19,9 +20,9 @@ SUCCESS_RATE = 0.7    # Action success rate when slippery (0.33 = default, 0.7 =
 # ============================================================
 
 # For quick testing
-TEST_MODE = True      # Set to True for quick tests
+TEST_MODE = False    # Set to True for quick tests
 TEST_EPISODES = 1000    # Episodes when TEST_MODE = True
-TEST_RUNS = 5           # Runs when TEST_MODE = True
+TEST_RUNS = 1          # Runs when TEST_MODE = True
 
 # For final experiments
 FINAL_EPISODES = 5000   # Episodes for final experiments
@@ -37,9 +38,10 @@ ALPHA = 0.1             # Learning rate (0.0 - 1.0)
 GAMMA = 1.0             # Discount factor (REQUIRED: 1.0 for this project)
 
 # Advanced (optional)
-EPSILON_DECAY = 0.995     # Epsilon decay per episode (1.0 = no decay)
-EPSILON_MIN = 0.0       # Minimum epsilon value
 INITIAL_Q_VALUE = 0.0   # Optimistic initialization (0.0 = neutral)
+
+# Reproducibility
+RANDOM_SEED = 42        # Global random seed for reproducibility (set to None for random behavior)
 
 # ============================================================
 # REWARD SHAPING PARAMETERS
@@ -64,25 +66,25 @@ BETA_EXPLORATION = 0.05 # Shaping strength for exploration bonus
 # ============================================================
 
 # For hyperparameter_sweep.py
-SWEEP_EPISODES = 2000   # Episodes per sweep experiment
+SWEEP_EPISODES = 5000   # Episodes per sweep experiment
 SWEEP_RUNS = 10         # Runs per sweep experiment
 
 # Epsilon sweep values
-EPSILON_SWEEP = [0.05, 0.1, 0.2]
+EPSILON_SWEEP = [0, 0.2, 0.5]
 
 # Alpha sweep values
-ALPHA_SWEEP = [0.05, 0.1, 0.2]
+ALPHA_SWEEP = [0.05, 0.2, 0.5]
 
-# Step-cost sweep values
-STEP_COST_SWEEP = [-0.001, -0.005, -0.01, -0.05]
+# # Step-cost sweep values
+# STEP_COST_SWEEP = [-0.001, -0.005, -0.01, -0.05]
 
-# Beta sweep values
-BETA_POTENTIAL_SWEEP = [0.5, 1.0, 2.0]
-BETA_SAFETY_SWEEP = [0.05, 0.1, 0.2, 0.5]
-BETA_EXPLORATION_SWEEP = [0.01, 0.05, 0.1, 0.2]
+# # Beta sweep values
+# BETA_POTENTIAL_SWEEP = [0.5, 1.0, 2.0]
+# BETA_SAFETY_SWEEP = [0.05, 0.1, 0.2, 0.5]
+# BETA_EXPLORATION_SWEEP = [0.01, 0.05, 0.1, 0.2]
 
-# Gamma sweep values (educational purposes - project requires 1.0)
-GAMMA_SWEEP = [0.95, 0.98, 0.99, 0.995, 1.0]
+# # Gamma sweep values (educational purposes - project requires 1.0)
+# GAMMA_SWEEP = [0.95, 0.98, 0.99, 0.995, 1.0]
 
 # ============================================================
 # OUTPUT CONFIGURATION
@@ -98,7 +100,8 @@ REPORT_FIGURES_DIR = 'report_figures'  # Directory for report figures
 def get_test_config():
     """Get configuration for quick testing (fast)."""
     return {
-        'grid_size': GRID_SIZE,
+        'grid_rows': GRID_ROWS,
+        'grid_cols': GRID_COLS,
         'hole_density': HOLE_DENSITY,
         'is_slippery': IS_SLIPPERY,
         'success_rate': SUCCESS_RATE,
@@ -112,7 +115,8 @@ def get_test_config():
 def get_final_config():
     """Get configuration for final experiments (slow but proper statistics)."""
     return {
-        'grid_size': GRID_SIZE,
+        'grid_rows': GRID_ROWS,
+        'grid_cols': GRID_COLS,
         'hole_density': HOLE_DENSITY,
         'is_slippery': IS_SLIPPERY,
         'success_rate': SUCCESS_RATE,
@@ -146,8 +150,8 @@ def print_config():
     print("CURRENT CONFIGURATION")
     print("=" * 70)
     print(f"\nEnvironment:")
-    print(f"  Grid Size: {GRID_SIZE}×{GRID_SIZE} ({GRID_SIZE**2} cells)")
-    print(f"  Hole Density: {HOLE_DENSITY} (~{round(GRID_SIZE**2 * HOLE_DENSITY)} holes)")
+    print(f"  Grid Size: {GRID_ROWS}×{GRID_COLS} ({GRID_ROWS * GRID_COLS} cells)")
+    print(f"  Hole Density: {HOLE_DENSITY} (~{round(GRID_ROWS * GRID_COLS * HOLE_DENSITY)} holes)")
     print(f"  Slippery: {IS_SLIPPERY}")
     if IS_SLIPPERY:
         print(f"  Success Rate: {SUCCESS_RATE} (default: 0.33)")
@@ -165,6 +169,7 @@ def print_config():
     print(f"  Epsilon (ε): {EPSILON}")
     print(f"  Alpha (α): {ALPHA}")
     print(f"  Gamma (γ): {GAMMA}")
+    print(f"  Random Seed: {RANDOM_SEED if RANDOM_SEED is not None else 'None (random)'}")
     
     print(f"\nReward Shaping Parameters:")
     print(f"  Step-Cost: c = {STEP_COST}")

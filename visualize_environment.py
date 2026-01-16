@@ -1,81 +1,177 @@
-"""
-Visualize the FrozenLake environment and learned policies.
-"""
-
-import os  # ADD THIS
+import os
+import config
+import numpy as np
 
 from env.frozenlake_env import create_frozenlake_env
 from algorithms.sarsa import SARSAAgent
-from algorithms.monte_carlo import MonteCarloAgent
 from env.reward_shaping import SafetyBasedShaping
 from env.metrics_wrapper import MetricsWrapper
 from utils.visualization import visualize_grid, print_grid_info, compare_policies
 
-# CREATE FOLDER FIRST - ADD THIS
 os.makedirs('report_figures', exist_ok=True)
 
+# Get SAME settings as experiments
+cfg = config.get_final_config() if not config.TEST_MODE else config.get_test_config()
 
-# 1. Show the environment
 print("\n" + "="*70)
 print("GENERATING VISUALIZATIONS FOR REPORT")
 print("="*70)
+print(f"\nUsing configuration:")
+print(f"  Grid: {cfg['grid_rows']}×{cfg['grid_cols']}")
+print(f"  Hole Density: {cfg['hole_density']}")
+print(f"  Slippery: {cfg['is_slippery']}")
+print(f"  Episodes: 5000 (20 runs)")
+print(f"  Epsilon: {cfg['epsilon']}")
+print(f"  Alpha: {cfg['alpha']}")
+print("="*70)
 
+# 1. Environment grid
 env = create_frozenlake_env(
-    grid_size=6,
-    hole_density=0.15,
-    is_slippery=True,
-    seed=42
+    rows=cfg['grid_rows'],
+    cols=cfg['grid_cols'],
+    hole_density=cfg['hole_density'],  
+    is_slippery=cfg['is_slippery'],
+    seed=242
 )
 
-# Print grid info
 print_grid_info(env)
 
-# Visualize empty grid
-print("\n[1/3] Visualizing environment grid...")
 visualize_grid(
     env, 
-    title="FrozenLake 6x6 Environment (15% holes)",
+    title=f"FrozenLake {cfg['grid_rows']}×{cfg['grid_cols']} Environment ({int(cfg['hole_density']*100)}% holes)",
     save_path="report_figures/environment_grid.png"
 )
 
-# 2. Train and visualize SARSA with Safety (your best method)
-print("\n[2/3] Training SARSA with Safety-Based shaping...")
-env_sarsa = create_frozenlake_env(grid_size=6, hole_density=0.15, is_slippery=True, seed=42)
-env_sarsa = SafetyBasedShaping(env_sarsa, beta=0.1)
+# 2. SARSA + Safety (20 runs × 5000 episodes)
+print(f"\n[2/3] Training SARSA + Safety (20 runs × 5000 episodes)...")
+
+all_throughputs_sarsa = []
+
+for run in range(20):
+    print(f"   Run {run + 1}/20...", end=" ")
+    
+    env_sarsa = create_frozenlake_env(
+        rows=cfg['grid_rows'],
+        cols=cfg['grid_cols'],
+        hole_density=cfg['hole_density'],
+        is_slippery=cfg['is_slippery'],
+        seed=242 + run
+    )
+    env_sarsa = SafetyBasedShaping(env_sarsa, beta=config.BETA_SAFETY)
+    env_sarsa = MetricsWrapper(env_sarsa)
+    
+    agent_sarsa = SARSAAgent(
+        env_sarsa,
+        epsilon=cfg['epsilon'],
+        alpha=cfg['alpha'],
+        gamma=cfg['gamma']
+    )
+    
+    successes, returns, lengths = agent_sarsa.train(num_episodes=5000)
+    throughput = np.sum(successes) / len(successes)
+    all_throughputs_sarsa.append(throughput)
+    
+    print(f"Throughput: {throughput:.1%}")
+    
+    env_sarsa.close()
+
+throughput_sarsa = np.mean(all_throughputs_sarsa)
+
+# Train one final time for policy visualization
+env_sarsa = create_frozenlake_env(
+    rows=cfg['grid_rows'],
+    cols=cfg['grid_cols'],
+    hole_density=cfg['hole_density'],
+    is_slippery=cfg['is_slippery'],
+    seed=242
+)
+env_sarsa = SafetyBasedShaping(env_sarsa, beta=config.BETA_SAFETY)
 env_sarsa = MetricsWrapper(env_sarsa)
 
-agent_sarsa = SARSAAgent(env_sarsa, epsilon=0.1, alpha=0.1, gamma=1.0)
-agent_sarsa.train(num_episodes=2000)
+agent_sarsa = SARSAAgent(
+    env_sarsa,
+    epsilon=cfg['epsilon'],
+    alpha=cfg['alpha'],
+    gamma=cfg['gamma']
+)
+agent_sarsa.train(num_episodes=5000)
 
 policy_sarsa = agent_sarsa.get_policy()
 value_sarsa = agent_sarsa.get_value_function()
+
+print(f"\n   ✓ Average Throughput (20 runs): {throughput_sarsa:.1%}")
 
 visualize_grid(
     env,
     policy=policy_sarsa,
     value_function=value_sarsa,
-    title="SARSA + Safety-Based Shaping - Learned Policy (56% success)",
+    title=f"SARSA + Safety-Based Shaping (Avg Throughput: {throughput_sarsa:.1%})",
     save_path="report_figures/sarsa_safety_policy.png"
 )
 
 env_sarsa.close()
 
-# 3. Train baseline for comparison
-print("\n[3/3] Training baseline SARSA for comparison...")
-env_baseline = create_frozenlake_env(grid_size=6, hole_density=0.15, is_slippery=True, seed=42)
+# 3. SARSA Baseline (20 runs × 5000 episodes)
+print(f"\n[3/3] Training SARSA Baseline (20 runs × 5000 episodes)...")
+
+all_throughputs_baseline = []
+
+for run in range(20):
+    print(f"   Run {run + 1}/20...", end=" ")
+    
+    env_baseline = create_frozenlake_env(
+        rows=cfg['grid_rows'],
+        cols=cfg['grid_cols'],
+        hole_density=cfg['hole_density'],
+        is_slippery=cfg['is_slippery'],
+        seed=242 + run
+    )
+    env_baseline = MetricsWrapper(env_baseline)
+    
+    agent_baseline = SARSAAgent(
+        env_baseline,
+        epsilon=cfg['epsilon'],
+        alpha=cfg['alpha'],
+        gamma=cfg['gamma']
+    )
+    
+    successes, returns, lengths = agent_baseline.train(num_episodes=5000)
+    throughput = np.sum(successes) / len(successes)
+    all_throughputs_baseline.append(throughput)
+    
+    print(f"Throughput: {throughput:.1%}")
+    
+    env_baseline.close()
+
+throughput_baseline = np.mean(all_throughputs_baseline)
+
+# Train one final time for policy visualization
+env_baseline = create_frozenlake_env(
+    rows=cfg['grid_rows'],
+    cols=cfg['grid_cols'],
+    hole_density=cfg['hole_density'],
+    is_slippery=cfg['is_slippery'],
+    seed=242
+)
 env_baseline = MetricsWrapper(env_baseline)
 
-agent_baseline = SARSAAgent(env_baseline, epsilon=0.1, alpha=0.1, gamma=1.0)
-agent_baseline.train(num_episodes=2000)
+agent_baseline = SARSAAgent(
+    env_baseline,
+    epsilon=cfg['epsilon'],
+    alpha=cfg['alpha'],
+    gamma=cfg['gamma']
+)
+agent_baseline.train(num_episodes=5000)
 
 policy_baseline = agent_baseline.get_policy()
 
-# Compare policies
+print(f"\n   ✓ Average Throughput (20 runs): {throughput_baseline:.1%}")
+
 compare_policies(
     env,
     {
-        'SARSA Baseline (42%)': policy_baseline,
-        'SARSA + Safety (56%)': policy_sarsa
+        f'SARSA Baseline ({throughput_baseline:.1%})': policy_baseline,
+        f'SARSA + Safety ({throughput_sarsa:.1%})': policy_sarsa
     },
     title="Policy Comparison: Baseline vs Safety-Based Shaping",
     save_path="report_figures/policy_comparison.png"
@@ -91,4 +187,7 @@ print("\nSaved to report_figures/:")
 print("  1. environment_grid.png")
 print("  2. sarsa_safety_policy.png")
 print("  3. policy_comparison.png")
+print(f"\nResults (averaged over 20 runs × 5000 episodes):")
+print(f"  SARSA Baseline: {throughput_baseline:.1%}")
+print(f"  SARSA + Safety: {throughput_sarsa:.1%}")
 print("="*70)

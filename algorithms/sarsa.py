@@ -12,7 +12,6 @@ from collections import defaultdict
 
 class SARSAAgent:
     def __init__(self, env, epsilon=0.1, alpha=0.1, gamma=1.0,
-                 epsilon_decay=1.0, epsilon_min=0.0,
                  initial_q_value=0.0):
         """
         Initialize the SARSA agent.
@@ -22,8 +21,6 @@ class SARSAAgent:
             epsilon (float): Exploration probability
             alpha (float): Learning rate
             gamma (float): Discount factor
-            epsilon_decay (float): Multiplicative decay factor per episode (default: 1.0 = no decay)
-            epsilon_min (float): Minimum epsilon value (default: 0.0)
             initial_q_value (float): Initial Q-value for all state-action pairs.
                                      Use 0.0 for neutral, >0 for optimistic initialization.
                                      Optimistic values (e.g., 0.5, 1.0) encourage exploration.
@@ -32,10 +29,6 @@ class SARSAAgent:
         self.epsilon = epsilon
         self.alpha = alpha
         self.gamma = gamma
-        
-        # Epsilon decay parameters
-        self.epsilon_decay = epsilon_decay
-        self.epsilon_min = epsilon_min
         
         # Optimistic initialization
         self.initial_q_value = initial_q_value
@@ -118,9 +111,6 @@ class SARSAAgent:
             success_log.append(ep_success)
             episode_lengths.append(step_count)
             real_returns.append(ep_real_return)
-            
-            # Apply epsilon decay
-            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         return success_log, real_returns, episode_lengths
 

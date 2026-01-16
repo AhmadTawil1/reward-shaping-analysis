@@ -30,7 +30,8 @@ def visualize_grid(env, policy=None, value_function=None, title="FrozenLake Grid
         save_path (str): Path to save figure (optional)
     """
     desc = env.unwrapped.desc
-    grid_size = len(desc)
+    rows = len(desc)
+    cols = len(desc[0]) if rows > 0 else 0
     
     fig, ax = plt.subplots(figsize=(10, 10))
     
@@ -42,27 +43,27 @@ def visualize_grid(env, policy=None, value_function=None, title="FrozenLake Grid
         'F': '#87CEEB'   # Sky blue for frozen
     }
     
-    for i in range(grid_size):
-        for j in range(grid_size):
+    for i in range(rows):
+        for j in range(cols):
             cell = desc[i][j]
             if isinstance(cell, bytes):
                 cell = cell.decode('utf-8')
             
             # Draw cell
             color = colors.get(cell, 'white')
-            rect = plt.Rectangle((j, grid_size - 1 - i), 1, 1, 
+            rect = plt.Rectangle((j, rows - 1 - i), 1, 1, 
                                  facecolor=color, edgecolor='black', linewidth=2)
             ax.add_patch(rect)
             
             # Add cell label
-            ax.text(j + 0.5, grid_size - 1 - i + 0.85, cell,
+            ax.text(j + 0.5, rows - 1 - i + 0.85, cell,
                    ha='center', va='top', fontsize=14, fontweight='bold')
             
             # Add value function
-            state = i * grid_size + j
+            state = i * cols + j
             if value_function is not None and state in value_function:
                 value = value_function[state]
-                ax.text(j + 0.5, grid_size - 1 - i + 0.5, f'{value:.2f}',
+                ax.text(j + 0.5, rows - 1 - i + 0.5, f'{value:.2f}',
                        ha='center', va='center', fontsize=10, 
                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
             
@@ -74,7 +75,7 @@ def visualize_grid(env, policy=None, value_function=None, title="FrozenLake Grid
                 arrow_offsets = [(-0.2, 0), (0, -0.2), (0.2, 0), (0, 0.2)]
                 
                 arrow_x = j + 0.5 + arrow_offsets[action][0]
-                arrow_y = grid_size - 1 - i + 0.15 + arrow_offsets[action][1]
+                arrow_y = rows - 1 - i + 0.15 + arrow_offsets[action][1]
                 
                 ax.text(arrow_x, arrow_y, arrows[action],
                        ha='center', va='center', fontsize=20, 
@@ -89,11 +90,11 @@ def visualize_grid(env, policy=None, value_function=None, title="FrozenLake Grid
     ]
     ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1, 1))
     
-    ax.set_xlim(0, grid_size)
-    ax.set_ylim(0, grid_size)
+    ax.set_xlim(0, cols)
+    ax.set_ylim(0, rows)
     ax.set_aspect('equal')
-    ax.set_xticks(range(grid_size + 1))
-    ax.set_yticks(range(grid_size + 1))
+    ax.set_xticks(range(cols + 1))
+    ax.set_yticks(range(rows + 1))
     ax.grid(True, alpha=0.3)
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     
@@ -117,7 +118,8 @@ def compare_policies(env, policies_dict, title="Policy Comparison", save_path=No
     """
     n_policies = len(policies_dict)
     desc = env.unwrapped.desc
-    grid_size = len(desc)
+    rows = len(desc)
+    cols = len(desc[0]) if rows > 0 else 0
     
     fig, axes = plt.subplots(1, n_policies, figsize=(6 * n_policies, 6))
     if n_policies == 1:
@@ -131,33 +133,33 @@ def compare_policies(env, policies_dict, title="Policy Comparison", save_path=No
     for idx, (label, policy) in enumerate(policies_dict.items()):
         ax = axes[idx]
         
-        for i in range(grid_size):
-            for j in range(grid_size):
+        for i in range(rows):
+            for j in range(cols):
                 cell = desc[i][j]
                 if isinstance(cell, bytes):
                     cell = cell.decode('utf-8')
                 
                 color = colors.get(cell, 'white')
-                rect = plt.Rectangle((j, grid_size - 1 - i), 1, 1, 
+                rect = plt.Rectangle((j, rows - 1 - i), 1, 1, 
                                      facecolor=color, edgecolor='black', linewidth=2)
                 ax.add_patch(rect)
                 
-                ax.text(j + 0.5, grid_size - 1 - i + 0.85, cell,
+                ax.text(j + 0.5, rows - 1 - i + 0.85, cell,
                        ha='center', va='top', fontsize=12, fontweight='bold')
                 
-                state = i * grid_size + j
+                state = i * cols + j
                 if policy is not None and state in policy:
                     action = policy[state]
                     arrows = ['←', '↓', '→', '↑']
-                    ax.text(j + 0.5, grid_size - 1 - i + 0.15, arrows[action],
+                    ax.text(j + 0.5, rows - 1 - i + 0.15, arrows[action],
                            ha='center', va='center', fontsize=18, 
                            color='darkblue', fontweight='bold')
         
-        ax.set_xlim(0, grid_size)
-        ax.set_ylim(0, grid_size)
+        ax.set_xlim(0, cols)
+        ax.set_ylim(0, rows)
         ax.set_aspect('equal')
-        ax.set_xticks(range(grid_size + 1))
-        ax.set_yticks(range(grid_size + 1))
+        ax.set_xticks(range(cols + 1))
+        ax.set_yticks(range(rows + 1))
         ax.grid(True, alpha=0.3)
         ax.set_title(label, fontsize=14, fontweight='bold')
     
@@ -184,7 +186,8 @@ def visualize_learning_progress(env, policies_at_episodes, value_functions_at_ep
     """
     n_snapshots = len(policies_at_episodes)
     desc = env.unwrapped.desc
-    grid_size = len(desc)
+    rows = len(desc)
+    cols = len(desc[0]) if rows > 0 else 0
     
     fig, axes = plt.subplots(1, n_snapshots, figsize=(6 * n_snapshots, 6))
     if n_snapshots == 1:
@@ -202,23 +205,23 @@ def visualize_learning_progress(env, policies_at_episodes, value_functions_at_ep
         policy = policies_at_episodes[episode]
         value_func = value_functions_at_episodes.get(episode) if value_functions_at_episodes else None
         
-        for i in range(grid_size):
-            for j in range(grid_size):
+        for i in range(rows):
+            for j in range(cols):
                 cell = desc[i][j]
                 if isinstance(cell, bytes):
                     cell = cell.decode('utf-8')
                 
                 color = colors.get(cell, 'white')
-                rect = plt.Rectangle((j, grid_size - 1 - i), 1, 1, 
+                rect = plt.Rectangle((j, rows - 1 - i), 1, 1, 
                                      facecolor=color, edgecolor='black', linewidth=2)
                 ax.add_patch(rect)
                 
-                state = i * grid_size + j
+                state = i * cols + j
                 
                 # Show value if available
                 if value_func is not None and state in value_func:
                     value = value_func[state]
-                    ax.text(j + 0.5, grid_size - 1 - i + 0.5, f'{value:.2f}',
+                    ax.text(j + 0.5, rows - 1 - i + 0.5, f'{value:.2f}',
                            ha='center', va='center', fontsize=9,
                            bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
                 
@@ -226,15 +229,15 @@ def visualize_learning_progress(env, policies_at_episodes, value_functions_at_ep
                 if policy is not None and state in policy:
                     action = policy[state]
                     arrows = ['←', '↓', '→', '↑']
-                    ax.text(j + 0.5, grid_size - 1 - i + 0.15, arrows[action],
+                    ax.text(j + 0.5, rows - 1 - i + 0.15, arrows[action],
                            ha='center', va='center', fontsize=16, 
                            color='darkblue', fontweight='bold')
         
-        ax.set_xlim(0, grid_size)
-        ax.set_ylim(0, grid_size)
+        ax.set_xlim(0, cols)
+        ax.set_ylim(0, rows)
         ax.set_aspect('equal')
-        ax.set_xticks(range(grid_size + 1))
-        ax.set_yticks(range(grid_size + 1))
+        ax.set_xticks(range(cols + 1))
+        ax.set_yticks(range(rows + 1))
         ax.grid(True, alpha=0.3)
         ax.set_title(f'Episode {episode}', fontsize=14, fontweight='bold')
     
@@ -255,13 +258,14 @@ def print_grid_info(env):
         env: Gymnasium FrozenLake environment
     """
     desc = env.unwrapped.desc
-    grid_size = len(desc)
+    rows = len(desc)
+    cols = len(desc[0]) if rows > 0 else 0
     
     print("=" * 50)
     print("FROZENLAKE GRID INFORMATION")
     print("=" * 50)
-    print(f"Grid Size: {grid_size}x{grid_size}")
-    print(f"Total Cells: {grid_size * grid_size}")
+    print(f"Grid Size: {rows}x{cols}")
+    print(f"Total Cells: {rows * cols}")
     
     # Count cell types
     counts = {'S': 0, 'G': 0, 'H': 0, 'F': 0}
@@ -277,7 +281,7 @@ def print_grid_info(env):
     print(f"  Holes (H):  {counts.get('H', 0)}")
     print(f"  Frozen (F): {counts.get('F', 0)}")
     
-    hole_density = counts.get('H', 0) / (grid_size * grid_size)
+    hole_density = counts.get('H', 0) / (rows * cols)
     print(f"\nHole Density: {hole_density:.2%}")
     print(f"Is Slippery: {env.unwrapped.spec.kwargs.get('is_slippery', True)}")
     print("=" * 50)
