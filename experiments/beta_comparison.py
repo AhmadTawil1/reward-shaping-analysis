@@ -196,8 +196,8 @@ def compare_beta_monte_carlo():
             hole_density=cfg['hole_density'],
             is_slippery=cfg['is_slippery'],
             success_rate=cfg['success_rate'],
-            epsilon=cfg['epsilon'],
-            alpha=cfg['alpha'],
+            epsilon=config.MC_HYPERPARAMS['potential']['epsilon'],
+            alpha=config.MC_HYPERPARAMS['potential']['alpha'],
             gamma=cfg['gamma'],
             initial_q_value=config.INITIAL_Q_VALUE,
             shaping_params={'beta': beta}
@@ -259,8 +259,8 @@ def compare_beta_sarsa():
             hole_density=cfg['hole_density'],
             is_slippery=cfg['is_slippery'],
             success_rate=cfg['success_rate'],
-            epsilon=cfg['epsilon'],
-            alpha=cfg['alpha'],
+            epsilon=config.SARSA_HYPERPARAMS['potential']['epsilon'],
+            alpha=config.SARSA_HYPERPARAMS['potential']['alpha'],
             gamma=cfg['gamma'],
             initial_q_value=config.INITIAL_Q_VALUE,
             shaping_params={'beta': beta}
@@ -329,8 +329,8 @@ if __name__ == "__main__":
     
     # Estimate runtime
     total_experiments = 2 * 2  # 2 beta values × 2 algorithms
-    estimated_time_min = total_experiments * 8
-    estimated_time_max = total_experiments * 15
+    estimated_time_min = total_experiments * 1
+    estimated_time_max = total_experiments * 1.5
     
     print(f"\n⏱️  Estimated runtime: {estimated_time_min}-{estimated_time_max} minutes")
     
@@ -354,25 +354,3 @@ if __name__ == "__main__":
     print("  📈 sarsa_beta_comparison_throughput.png")
     print("  📈 sarsa_beta_comparison_returns.png")
     
-    print("\n" + "="*70)
-    print("💡 KEY INSIGHTS FOR YOUR REPORT")
-    print("="*70)
-    
-    print("\n1️⃣  Beta (β) Parameter:")
-    print("   • Controls the strength of potential-based shaping")
-    print("   • β=1.0: Full strength shaping signal")
-    print("   • β=0.7: Matches the environment's success_rate")
-    print("   • Lower β = gentler guidance, more agent exploration")
-    
-    print("\n2️⃣  Expected Behavior:")
-    print("   • β=1.0 might converge faster initially")
-    print("   • β=0.7 might be more stable in stochastic environments")
-    print("   • The 'best' β depends on algorithm and environment")
-    
-    print("\n3️⃣  For Your Report:")
-    print("   • Include both throughput and returns plots")
-    print("   • Explain which β performed better and why")
-    print("   • Discuss the tradeoff between shaping strength and stability")
-    print("   • Note any differences between MC and SARSA behavior")
-    
-    print("="*70)

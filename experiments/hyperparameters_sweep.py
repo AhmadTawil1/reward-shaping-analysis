@@ -271,7 +271,7 @@ def epsilon_sensitivity_study():
     print("EPSILON SENSITIVITY STUDY")
     print("="*70)
     print(f"Testing epsilon values: {config.EPSILON_SWEEP}")
-    print(f"Fixed alpha: {config.ALPHA}")
+    print(f"Fixed alpha: {config.ALPHA_SWEEP[0]}")
     print(f"Algorithm: SARSA + Safety-Based Shaping")
     print(f"Episodes per run: {config.SWEEP_EPISODES}")
     print(f"Number of runs: {config.SWEEP_RUNS}")
@@ -295,9 +295,9 @@ def epsilon_sensitivity_study():
             hole_density=config.HOLE_DENSITY,
             is_slippery=config.IS_SLIPPERY,
             epsilon=epsilon,            # VARY THIS
-            alpha=config.ALPHA,         # FIXED
+            alpha=config.ALPHA_SWEEP[0],  # FIXED (first sweep value)
             gamma=config.GAMMA,
-            shaping_params={'beta': config.BETA_SAFETY}
+            shaping_params={'beta': config.BETA_SAFETY_SARSA}
         )
         
         results[epsilon] = returns
@@ -340,7 +340,7 @@ def alpha_sensitivity_study():
     print("ALPHA SENSITIVITY STUDY")
     print("="*70)
     print(f"Testing alpha values: {config.ALPHA_SWEEP}")
-    print(f"Fixed epsilon: {config.EPSILON}")
+    print(f"Fixed epsilon: {config.EPSILON_SWEEP[0]}")
     print(f"Algorithm: SARSA + Safety-Based Shaping")
     print(f"Episodes per run: {config.SWEEP_EPISODES}")
     print(f"Number of runs: {config.SWEEP_RUNS}")
@@ -363,10 +363,10 @@ def alpha_sensitivity_study():
             grid_cols=config.GRID_COLS,
             hole_density=config.HOLE_DENSITY,
             is_slippery=config.IS_SLIPPERY,
-            epsilon=config.EPSILON,     # FIXED
+            epsilon=config.EPSILON_SWEEP[0],  # FIXED (first sweep value)
             alpha=alpha,                # VARY THIS
             gamma=config.GAMMA,
-            shaping_params={'beta': config.BETA_SAFETY}
+            shaping_params={'beta': config.BETA_SAFETY_SARSA}
         )
         
         results[alpha] = returns
@@ -423,8 +423,8 @@ if __name__ == "__main__":
     # Estimate runtime
     total_experiments = (len(config.EPSILON_SWEEP) + len(config.ALPHA_SWEEP))
     total_episodes = total_experiments * config.SWEEP_RUNS * config.SWEEP_EPISODES
-    estimated_time_min = total_experiments * 8
-    estimated_time_max = total_experiments * 15
+    estimated_time_min = total_experiments * 1
+    estimated_time_max = total_experiments * 1.5
     
     print(f"\n⏱️  Estimated runtime: {estimated_time_min}-{estimated_time_max} minutes")
     print(f"   ({total_episodes:,} total episodes across all experiments)")
@@ -474,59 +474,6 @@ if __name__ == "__main__":
     print("  📈 epsilon_sensitivity_throughput.png   (throughput only)")
     print("  📈 alpha_sensitivity_throughput.png     (throughput only)")
     
-    # Provide insights
-    print("\n" + "="*70)
-    print("💡 KEY INSIGHTS FOR YOUR REPORT")
-    print("="*70)
-    
-    print("\n1️⃣  Epsilon (ε) - Exploration vs Exploitation:")
-    print("   • Controls how often agent explores vs exploits")
-    print("   • Low ε (e.g., 0.05):")
-    print("     - Converges faster initially")
-    print("     - May get stuck in local optima")
-    print("     - Good when environment is well-understood")
-    print("   • High ε (e.g., 0.2):")
-    print("     - More thorough exploration")
-    print("     - Slower convergence")
-    print("     - Noisier learning curves")
-    print("     - Better for complex/stochastic environments")
-    
-    print("\n2️⃣  Alpha (α) - Learning Rate:")
-    print("   • Controls how fast agent updates Q-values")
-    print("   • Low α (e.g., 0.05):")
-    print("     - Smooth, stable learning")
-    print("     - Slow to adapt to new information")
-    print("     - Good for non-stationary environments")
-    print("   • High α (e.g., 0.2):")
-    print("     - Fast initial learning")
-    print("     - Potentially unstable/oscillating")
-    print("     - Sensitive to noisy rewards")
-    
-    print("\n3️⃣  Connection to Exploration vs Exploitation Problem:")
-    print("   • ε directly controls this tradeoff")
-    print("   • α indirectly affects it (fast learning → faster exploitation)")
-    print("   • Optimal values depend on:")
-    print("     - Environment complexity")
-    print("     - Reward sparsity")
-    print("     - Stochasticity level")
-    
-    print("\n4️⃣  For Your Report Discussion:")
-    print("   • Use the 3-subplot figures as your main figures")
-    print("   • Each figure shows returns, throughput, AND episode lengths")
-    print("   • Explain WHY you chose the default ε and α values")
-    print("   • Show how suboptimal values hurt performance")
-    print("   • Discuss the tradeoff between speed and stability")
-    print("   • Relate findings to the stochastic FrozenLake environment")
-    print("   • Episode lengths show efficiency of learned policies")
-    
-    print("\n5️⃣  For Your Presentation:")
-    print("   • Show the epsilon and alpha 3-subplot figures")
-    print("   • Each figure provides comprehensive view of parameter effects")
-    print("   • Highlight the best performing parameter values")
-    print("   • Explain the curves (why they look different)")
-    print("   • Connect to exploration-exploitation theme")
-    print("   • Episode lengths demonstrate learning efficiency")
-    
     # Best values summary
     print("\n" + "="*70)
     print("🏆 OPTIMAL HYPERPARAMETERS FOUND")
@@ -543,7 +490,7 @@ if __name__ == "__main__":
     print(f"\n  Best ε: {best_epsilon:.3f} (throughput: {best_epsilon_throughput*100:.2f}%)")
     print(f"  Best α: {best_alpha:.3f} (throughput: {best_alpha_throughput*100:.2f}%)")
     
-    if best_epsilon == config.EPSILON and best_alpha == config.ALPHA:
+    if best_epsilon == config.EPSILON_SWEEP[0] and best_alpha == config.ALPHA_SWEEP[0]:
         print("\n  ✅ Your default config values are optimal!")
     else:
         print(f"\n  💡 Consider updating config.py:")

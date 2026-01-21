@@ -22,55 +22,68 @@ SUCCESS_RATE = 0.7    # Action success rate when slippery (0.33 = default, 0.7 =
 # For quick testing
 TEST_MODE = False    # Set to True for quick tests
 TEST_EPISODES = 1000    # Episodes when TEST_MODE = True
-TEST_RUNS = 1          # Runs when TEST_MODE = True
+TEST_RUNS = 5          # Runs when TEST_MODE = True
 
 # For final experiments
-FINAL_EPISODES = 5000   # Episodes for final experiments
+FINAL_EPISODES = 10000   # Episodes for final experiments
 FINAL_RUNS = 20         # Runs for final experiments (recommended: 20-50)
 
 # ============================================================
 # ALGORITHM HYPERPARAMETERS
 # ============================================================
 
-# Exploration & Learning
-EPSILON = 0.1           # Exploration rate (0.0 - 1.0)
-ALPHA = 0.1             # Learning rate (0.0 - 1.0)
 GAMMA = 1.0             # Discount factor (REQUIRED: 1.0 for this project)
-
-# Advanced (optional)
 INITIAL_Q_VALUE = 0.0   # Optimistic initialization (0.0 = neutral)
+RANDOM_SEED = 242       # Global random seed for reproducibility
 
-# Reproducibility
-RANDOM_SEED = 42        # Global random seed for reproducibility (set to None for random behavior)
 
 # ============================================================
-# REWARD SHAPING PARAMETERS
+# OPTIMIZED HYPERPARAMETERS (from grid search)
 # ============================================================
+# These are the best hyperparameters found through systematic search
+# Use get_optimized_hyperparams() and get_shaping_params() for final experiments
 
-# Step-Cost Shaping
-STEP_COST = -0.01       # Penalty per step (negative value)
+# Monte Carlo - Optimized per shaping method
+MC_HYPERPARAMS = {
+    'baseline': {'epsilon': 0.05, 'alpha': 0.05},
+    'step': {'epsilon': 0.05, 'alpha': 0.05},
+    'potential': {'epsilon': 0.05, 'alpha': 0.05},
+    'safety': {'epsilon': 0.05, 'alpha': 0.05},
+    'exploration': {'epsilon': 0.1, 'alpha': 0.05}
+}
 
-# Potential-Based Shaping
-BETA_POTENTIAL = 1.0    # Shaping strength for potential-based
+# SARSA - Optimized per shaping method
+SARSA_HYPERPARAMS = {
+    'baseline': {'epsilon': 0.1, 'alpha': 0.2},
+    'step': {'epsilon': 0.1, 'alpha': 0.2},
+    'potential': {'epsilon': 0.05, 'alpha': 0.1},
+    'safety': {'epsilon': 0.05, 'alpha': 0.2},
+    'exploration': {'epsilon': 0.05, 'alpha': 0.2}
+}
 
-# Safety-Based Shaping (Custom #1)
-BETA_SAFETY = 0.1       # Shaping strength for safety-based
-                        # Recommended: 0.1 for SARSA
+# Optimized shaping parameters per algorithm
+STEP_COST_MC = -0.01      # Best for Monte Carlo
+STEP_COST_SARSA = -0.005  # Best for SARSA
 
-# Exploration Bonus (Custom #2)
-BETA_EXPLORATION = 0.05 # Shaping strength for exploration bonus
-                        # Recommended: 0.02-0.05 for MC
+BETA_POTENTIAL_MC = 0.5    # Best for Monte Carlo
+BETA_POTENTIAL_SARSA = 1.0 # Best for SARSA
+
+BETA_SAFETY_MC = 0.05      # Best for Monte Carlo
+BETA_SAFETY_SARSA = 0.05   # Best for SARSA
+
+BETA_EXPLORATION_MC = 0.05   # Best for Monte Carlo
+BETA_EXPLORATION_SARSA = 0.02 # Best for SARSA
 
 # ============================================================
 # HYPERPARAMETER SWEEP RANGES
 # ============================================================
 
 # For hyperparameter_sweep.py
-SWEEP_EPISODES = 5000   # Episodes per sweep experiment
+SWEEP_EPISODES = 10000   # Episodes per sweep experiment
 SWEEP_RUNS = 10         # Runs per sweep experiment
 
 # Epsilon sweep values
-EPSILON_SWEEP = [0, 0.2, 0.5]
+EPSILON_SWEEP = [0.05, 0.2, 0.5]
 
 # Alpha sweep values
 ALPHA_SWEEP = [0.05, 0.2, 0.5]
@@ -107,8 +120,6 @@ def get_test_config():
         'success_rate': SUCCESS_RATE,
         'num_episodes': TEST_EPISODES,
         'num_runs': TEST_RUNS,
-        'epsilon': EPSILON,
-        'alpha': ALPHA,
         'gamma': GAMMA,
     }
 
@@ -122,23 +133,63 @@ def get_final_config():
         'success_rate': SUCCESS_RATE,
         'num_episodes': FINAL_EPISODES,
         'num_runs': FINAL_RUNS,
-        'epsilon': EPSILON,
-        'alpha': ALPHA,
         'gamma': GAMMA,
     }
 
-def get_shaping_params(shaping_type):
-    """Get parameters for specific shaping type."""
+def get_shaping_params(shaping_type, algorithm='MC'):
+    """
+    Get optimized parameters for specific shaping type and algorithm.
+    
+    Args:
+        shaping_type (str): 'step', 'potential', 'safety', 'exploration', or None
+        algorithm (str): 'MC' or 'SARSA'
+    
+    Returns:
+        dict: Shaping parameters optimized for the algorithm
+    """
     if shaping_type == 'step':
-        return {'step_cost': STEP_COST}
+        if algorithm == 'MC':
+            return {'step_cost': STEP_COST_MC}
+        else:  # SARSA
+            return {'step_cost': STEP_COST_SARSA}
     elif shaping_type == 'potential':
-        return {'beta': BETA_POTENTIAL}
+        if algorithm == 'MC':
+            return {'beta': BETA_POTENTIAL_MC}
+        else:  # SARSA
+            return {'beta': BETA_POTENTIAL_SARSA}
     elif shaping_type == 'safety':
-        return {'beta': BETA_SAFETY}
+        if algorithm == 'MC':
+            return {'beta': BETA_SAFETY_MC}
+        else:  # SARSA
+            return {'beta': BETA_SAFETY_SARSA}
     elif shaping_type == 'exploration':
-        return {'beta': BETA_EXPLORATION}
+        if algorithm == 'MC':
+            return {'beta': BETA_EXPLORATION_MC}
+        else:  # SARSA
+            return {'beta': BETA_EXPLORATION_SARSA}
     else:
         return {}
+
+
+def get_optimized_hyperparams(algorithm, shaping_type):
+    """
+    Get optimized epsilon and alpha for specific algorithm and shaping method.
+    
+    Args:
+        algorithm (str): 'MC' or 'SARSA'
+        shaping_type (str): 'baseline', 'step', 'potential', 'safety', 'exploration', or None
+    
+    Returns:
+        dict: {'epsilon': float, 'alpha': float}
+    """
+    # Map None to 'baseline'
+    if shaping_type is None:
+        shaping_type = 'baseline'
+    
+    if algorithm == 'MC':
+        return MC_HYPERPARAMS.get(shaping_type, MC_HYPERPARAMS['baseline'])
+    else:  # SARSA
+        return SARSA_HYPERPARAMS.get(shaping_type, SARSA_HYPERPARAMS['baseline'])
 
 # ============================================================
 # PRINT CURRENT CONFIGURATION
@@ -165,17 +216,13 @@ def print_config():
         print(f"  Episodes: {FINAL_EPISODES}")
         print(f"  Runs: {FINAL_RUNS}")
     
-    print(f"\nAlgorithm Hyperparameters:")
-    print(f"  Epsilon (ε): {EPSILON}")
-    print(f"  Alpha (α): {ALPHA}")
+    print(f"\nGlobal Parameters:")
     print(f"  Gamma (γ): {GAMMA}")
     print(f"  Random Seed: {RANDOM_SEED if RANDOM_SEED is not None else 'None (random)'}")
     
-    print(f"\nReward Shaping Parameters:")
-    print(f"  Step-Cost: c = {STEP_COST}")
-    print(f"  Potential-Based: β = {BETA_POTENTIAL}")
-    print(f"  Safety-Based: β = {BETA_SAFETY}")
-    print(f"  Exploration Bonus: β = {BETA_EXPLORATION}")
+    print(f"\nOptimized Hyperparameters (use get_optimized_hyperparams()):")
+    print(f"  MC Baseline: ε={MC_HYPERPARAMS['baseline']['epsilon']}, α={MC_HYPERPARAMS['baseline']['alpha']}")
+    print(f"  SARSA Baseline: ε={SARSA_HYPERPARAMS['baseline']['epsilon']}, α={SARSA_HYPERPARAMS['baseline']['alpha']}")
     
     print("=" * 70)
 

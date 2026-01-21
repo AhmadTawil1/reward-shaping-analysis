@@ -3,7 +3,7 @@ FrozenLake Environment Generator
 
 This module provides a configurable FrozenLake environment generator
 that supports:
-- Arbitrary grid sizes (>= 2x2)
+- Arbitrary grid sizes (>= 6x6)
 - Controlled hole density (10%–20%)
 - Exactly one start and one goal
 - Slippery or non-slippery dynamics
@@ -12,7 +12,7 @@ that supports:
 Used by:
 - Monte Carlo Control
 - SARSA
-- Reward shaping wrappers (later)
+- Reward shaping wrappers
 """
 
 import numpy as np

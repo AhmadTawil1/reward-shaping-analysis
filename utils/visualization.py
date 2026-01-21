@@ -106,13 +106,14 @@ def visualize_grid(env, policy=None, value_function=None, title="FrozenLake Grid
     plt.show()
 
 
-def compare_policies(env, policies_dict, title="Policy Comparison", save_path=None):
+def compare_policies(env, policies_dict, value_functions_dict=None, title="Policy Comparison", save_path=None):
     """
-    Visualize multiple policies side by side.
+    Visualize multiple policies side by side with optional value functions.
     
     Args:
         env: Gymnasium FrozenLake environment
         policies_dict (dict): {label: policy} mappings
+        value_functions_dict (dict): {label: value_function} mappings (optional)
         title (str): Overall title
         save_path (str): Path to save figure (optional)
     """
@@ -133,6 +134,11 @@ def compare_policies(env, policies_dict, title="Policy Comparison", save_path=No
     for idx, (label, policy) in enumerate(policies_dict.items()):
         ax = axes[idx]
         
+        # Get corresponding value function if available
+        value_func = None
+        if value_functions_dict is not None and label in value_functions_dict:
+            value_func = value_functions_dict[label]
+        
         for i in range(rows):
             for j in range(cols):
                 cell = desc[i][j]
@@ -148,6 +154,15 @@ def compare_policies(env, policies_dict, title="Policy Comparison", save_path=No
                        ha='center', va='top', fontsize=12, fontweight='bold')
                 
                 state = i * cols + j
+                
+                # Add value function (like visualize_grid does)
+                if value_func is not None and state in value_func:
+                    value = value_func[state]
+                    ax.text(j + 0.5, rows - 1 - i + 0.5, f'{value:.2f}',
+                           ha='center', va='center', fontsize=10, 
+                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
+                
+                # Add policy arrow (like visualize_grid does)
                 if policy is not None and state in policy:
                     action = policy[state]
                     arrows = ['←', '↓', '→', '↑']
@@ -189,16 +204,25 @@ def visualize_learning_progress(env, policies_at_episodes, value_functions_at_ep
     rows = len(desc)
     cols = len(desc[0]) if rows > 0 else 0
     
-    fig, axes = plt.subplots(1, n_snapshots, figsize=(6 * n_snapshots, 6))
+    # Calculate grid layout (max 3 columns for readability)
+    n_cols = min(3, n_snapshots)
+    n_rows = (n_snapshots + n_cols - 1) // n_cols  # Ceiling division
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 6 * n_rows), 
+                             constrained_layout=True)
+    
+    # Flatten axes array for easier indexing
     if n_snapshots == 1:
         axes = [axes]
+    else:
+        axes = axes.flatten() if n_snapshots > 1 else [axes]
     
     colors = {
         'S': '#90EE90', 'G': '#FFD700', 
         'H': '#FF6B6B', 'F': '#87CEEB'
     }
     
-    sorted_episodes = sorted(policies_at_episodes.keys())
+    sorted_episodes = sorted([ep for ep in policies_at_episodes.keys() if ep > 0])
     
     for idx, episode in enumerate(sorted_episodes):
         ax = axes[idx]
@@ -240,6 +264,10 @@ def visualize_learning_progress(env, policies_at_episodes, value_functions_at_ep
         ax.set_yticks(range(rows + 1))
         ax.grid(True, alpha=0.3)
         ax.set_title(f'Episode {episode}', fontsize=14, fontweight='bold')
+    
+    # Hide unused subplots
+    for idx in range(len(sorted_episodes), len(axes)):
+        axes[idx].axis('off')
     
     plt.suptitle(title, fontsize=16, fontweight='bold')
     plt.tight_layout()

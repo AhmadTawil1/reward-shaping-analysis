@@ -4,6 +4,7 @@ Multi-run Monte Carlo experiments with reward shaping.
 
 import numpy as np
 
+import config
 from env.frozenlake_env import create_frozenlake_env
 from algorithms.monte_carlo import MonteCarloAgent
 from env.reward_shaping import (
@@ -28,7 +29,8 @@ def run_monte_carlo(
     alpha=0.1,
     gamma=1.0,
     initial_q_value=0.0,
-    shaping_params=None
+    shaping_params=None,
+    return_best_agent=False
 ):
     """
     Run Monte Carlo experiments over multiple random seeds.
@@ -47,9 +49,11 @@ def run_monte_carlo(
         gamma (float): Discount factor (should be 1.0 per project)
         initial_q_value (float): Initial Q-value for optimistic initialization
         shaping_params (dict): Additional parameters for shaping (e.g., {'step_cost': -0.01})
+        return_best_agent (bool): If True, also return the trained agent from the best run
     
     Returns:
         tuple: (successes, returns, lengths) - each shape (num_runs, num_episodes)
+               If return_best_agent=True: (successes, returns, lengths, best_agent, best_env)
     """
     
     # Default shaping parameters
@@ -98,17 +102,29 @@ def run_monte_carlo(
     all_successes = []
     all_returns = []
     all_lengths = []
+    
+    # Track best agent if requested
+    best_agent = None
+    best_env = None
+    best_throughput = -1
 
     for seed in range(num_runs):
         print(f"[MC] Run {seed + 1}/{num_runs}")
 
+        # --- Seed numpy RNG for this run (for agent's random actions) ---
+        # Use different seed for each run to ensure independence
+        # while keeping environment seed constant for same map
+        run_seed = config.RANDOM_SEED + seed + 1000  # Offset to avoid collision
+        np.random.seed(run_seed)
+
         # --- Create Base Environment ---
+        # Use fixed seed from config for all runs to ensure same map
         env = create_frozenlake_env(
             rows=grid_rows,
             cols=grid_cols,
             hole_density=hole_density,
             is_slippery=is_slippery,
-            seed=seed,
+            seed=config.RANDOM_SEED,
             success_rate=success_rate
         )
 
@@ -140,18 +156,37 @@ def run_monte_carlo(
 
         # --- Train ---
         successes, returns, lengths = agent.train(num_episodes=num_episodes)
+        
+        # Track best agent based on final throughput
+        if return_best_agent:
+            run_throughput = np.sum(successes) / len(successes)
+            if run_throughput > best_throughput:
+                best_throughput = run_throughput
+                best_agent = agent
+                best_env = env
 
-        env.close()
+        # Close env if not keeping it
+        if not return_best_agent or agent is not best_agent:
+            env.close()
 
         all_successes.append(successes)
         all_returns.append(returns)
         all_lengths.append(lengths)
 
-    return (
-        np.array(all_successes),
-        np.array(all_returns),
-        np.array(all_lengths),
-    )
+    if return_best_agent:
+        return (
+            np.array(all_successes),
+            np.array(all_returns),
+            np.array(all_lengths),
+            best_agent,
+            best_env
+        )
+    else:
+        return (
+            np.array(all_successes),
+            np.array(all_returns),
+            np.array(all_lengths),
+        )
 
 
 if __name__ == "__main__":

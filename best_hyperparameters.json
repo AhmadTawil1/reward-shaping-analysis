@@ -1,0 +1,80 @@
+{
+  "MC_baseline": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.05
+    },
+    "throughput": 0.574
+  },
+  "MC_step": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.05,
+      "step_cost": -0.01
+    },
+    "throughput": 0.298
+  },
+  "MC_potential": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.05,
+      "beta": 0.5
+    },
+    "throughput": 0.544
+  },
+  "MC_safety": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.05,
+      "beta": 0.05
+    },
+    "throughput": 0.516
+  },
+  "MC_exploration": {
+    "params": {
+      "epsilon": 0.1,
+      "alpha": 0.05,
+      "beta": 0.05
+    },
+    "throughput": 0.48
+  },
+  "SARSA_baseline": {
+    "params": {
+      "epsilon": 0.1,
+      "alpha": 0.2
+    },
+    "throughput": 0.636
+  },
+  "SARSA_step": {
+    "params": {
+      "epsilon": 0.1,
+      "alpha": 0.2,
+      "step_cost": -0.005
+    },
+    "throughput": 0.404
+  },
+  "SARSA_potential": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.1,
+      "beta": 1.0
+    },
+    "throughput": 0.748
+  },
+  "SARSA_safety": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.2,
+      "beta": 0.05
+    },
+    "throughput": 0.8
+  },
+  "SARSA_exploration": {
+    "params": {
+      "epsilon": 0.05,
+      "alpha": 0.2,
+      "beta": 0.02
+    },
+    "throughput": 0.79
+  }
+}

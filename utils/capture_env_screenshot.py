@@ -93,7 +93,7 @@ if __name__ == "__main__":
     print("  3. Capture and save a screenshot")
     print("="*70)
     
-    input("\n👉 Press ENTER to start...")
+    input("\n Press ENTER to start...")
     
     # Capture screenshot
     capture_environment_screenshot(
@@ -109,5 +109,4 @@ if __name__ == "__main__":
     print("✅ SCREENSHOT CAPTURE COMPLETE!")
     print("="*70)
     print(f"\nScreenshot saved to: {config.RESULTS_DIR}/frozenlake_environment.png")
-    print("\n💡 You can now use this image in your report or presentation!")
     print("="*70)

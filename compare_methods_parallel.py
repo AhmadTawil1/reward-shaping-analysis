@@ -1,18 +1,18 @@
 """
-Comprehensive Reward Shaping Comparison - SEQUENTIAL EXECUTION VERSION
+Comprehensive Reward Shaping Comparison - PARALLEL EXECUTION VERSION
 
 This script compares all reward shaping methods (Baseline, Step-Cost, Potential-Based,
 Safety-Based, and Exploration Bonus) for both Monte Carlo and SARSA algorithms using
-SEQUENTIAL execution (one run at a time).
+PARALLEL execution for maximum performance.
 
 === WHAT THIS SCRIPT DOES ===
 
-1. MONTE CARLO COMPARISON (Sequential):
+1. MONTE CARLO COMPARISON (Parallel):
    - Runs 5 reward shaping methods
    - Each method: 20 independent runs × 10,000 episodes
    - Generates throughput and returns plots
 
-2. SARSA COMPARISON (Sequential):
+2. SARSA COMPARISON (Parallel):
    - Runs 5 reward shaping methods
    - Each method: 20 independent runs × 10,000 episodes
    - Generates throughput and returns plots
@@ -25,24 +25,24 @@ SEQUENTIAL execution (one run at a time).
    - Visualizes learned policies for best methods
    - Shows action arrows and Q-values on grid
 
-=== HOW SEQUENTIAL EXECUTION WORKS ===
+=== HOW PARALLELIZATION WORKS ===
 
-- For each method: 20 runs execute ONE AT A TIME (sequentially)
-- Uses a simple for loop: for seed in range(num_runs)
-- Each run completes before the next one starts
-- Lower memory usage, easier to debug
-- Slower execution time (no parallelization)
+- For each method: 20 runs execute SIMULTANEOUSLY across CPU cores
+- Uses joblib.Parallel with n_jobs=-1 (all available cores)
+- Each run is completely independent (different random seed)
+- Results are aggregated after all runs complete
+- Expected speedup: 6-9x faster than sequential execution
 
 === OUTPUTS ===
 
 PLOTS GENERATED:
-  • mc_all_methods_throughput.png
-  • mc_all_methods_returns.png
-  • sarsa_all_methods_throughput.png
-  • sarsa_all_methods_returns.png
-  • final_mc_vs_sarsa_throughput.png
-  • final_mc_vs_sarsa_returns.png
-  • best_policies_comparison.png
+  • mc_all_methods_throughput_parallel.png
+  • mc_all_methods_returns_parallel.png
+  • sarsa_all_methods_throughput_parallel.png
+  • sarsa_all_methods_returns_parallel.png
+  • final_mc_vs_sarsa_throughput_parallel.png
+  • final_mc_vs_sarsa_returns_parallel.png
+  • best_policies_comparison_parallel.png
 
 CONSOLE OUTPUT:
   • Summary tables for each algorithm
@@ -69,10 +69,6 @@ For each episode:
 - All experiments use same environment map (controlled by RANDOM_SEED)
 - Each run uses different agent seed for independence
 
-=== USAGE ===
-
-python compare_methods.py
-
 """
 
 import numpy as np
@@ -85,9 +81,8 @@ from tqdm import tqdm
 # Import configuration
 import config
 
-from experiments.run_monte_carlo import run_monte_carlo
-from experiments.run_sarsa import run_sarsa
-from utils.policy_visualization import visualize_policy_grid, visualize_policy_comparison
+from experiments.run_monte_carlo_parallel import run_monte_carlo_parallel
+from experiments.run_sarsa_parallel import run_sarsa_parallel
 
 
 def compute_throughput(successes):
@@ -106,7 +101,7 @@ def print_results_table(results, algorithm_name):
         algorithm_name (str): 'Monte Carlo' or 'SARSA'
     """
     print("\n" + "="*80)
-    print(f"{algorithm_name.upper()} - RESULTS SUMMARY")
+    print(f"{algorithm_name.upper()} - RESULTS SUMMARY (PARALLEL)")
     print("="*80)
     
     # Header
@@ -161,41 +156,6 @@ def print_results_table(results, algorithm_name):
         print(f"   ({baseline_throughput*100:.2f}% → {best_throughput*100:.2f}%)")
     
     print("="*80 + "\n")
-
-
-def get_best_method(results):
-    """
-    Determine the best method from results based on throughput.
-    
-    Args:
-        results (dict): Dictionary with method names as keys and data as values
-        
-    Returns:
-        tuple: (best_method_label, shaping_type)
-    """
-    best_throughput = -1
-    best_label = None
-    
-    for label, data in results.items():
-        final_throughput = np.mean(data['throughput'][:, -1])
-        if final_throughput > best_throughput:
-            best_throughput = final_throughput
-            best_label = label
-    
-    # Extract shaping type from label
-    # Labels are like: 'Baseline (No Shaping)', 'Step-Cost Shaping', etc.
-    shaping_map = {
-        'Baseline (No Shaping)': None,
-        'Step-Cost Shaping': 'step',
-        'Potential-Based Shaping': 'potential',
-        'Safety-Based Shaping (Custom)': 'safety',
-        'Exploration Bonus (Custom)': 'exploration'
-    }
-    
-    shaping_type = shaping_map.get(best_label, None)
-    
-    return best_label, shaping_type
-
 
 
 def plot_comparison(results_dict, metric='throughput', title='Comparison', 
@@ -293,10 +253,10 @@ def plot_returns_subplots(results_dict, title_prefix='', save_path=None):
     plt.show()
 
 
-def compare_all_mc_methods():
-    """Compare all reward shaping methods for Monte Carlo."""
+def compare_all_mc_methods_parallel():
+    """Compare all reward shaping methods for Monte Carlo using parallel execution."""
     print("\n" + "="*70)
-    print("COMPARING ALL MONTE CARLO METHODS")
+    print("COMPARING ALL MONTE CARLO METHODS (PARALLEL)")
     print("="*70)
     
     # Get config
@@ -319,8 +279,8 @@ def compare_all_mc_methods():
         # Get optimized hyperparameters for this shaping method
         hyperparams = config.get_optimized_hyperparams('MC', shaping_type)
         
-        # Run with return_best_agent=True to get the trained agent
-        successes, returns, lengths, best_agent, best_env = run_monte_carlo(
+        # Run with parallel execution - get best agent for visualization
+        successes, returns, lengths, best_agent, best_env = run_monte_carlo_parallel(
             num_episodes=cfg['num_episodes'],
             num_runs=cfg['num_runs'],
             shaping_type=shaping_type,
@@ -334,7 +294,8 @@ def compare_all_mc_methods():
             gamma=cfg['gamma'],
             initial_q_value=config.INITIAL_Q_VALUE,
             shaping_params=config.get_shaping_params(shaping_type, algorithm='MC'),
-            return_best_agent=True  # Get the trained agent
+            return_best_agent=True,  # Get the trained agent for visualization
+            n_jobs=-1  # Use all CPU cores
         )
         results[label] = {
             'successes': successes,
@@ -352,28 +313,26 @@ def compare_all_mc_methods():
     throughput_data = {label: data['throughput'] for label, data in results.items()}
     plot_comparison(
         throughput_data,
-        title='Monte Carlo: All Shaping Methods - Throughput Comparison',
+        title='Monte Carlo (PARALLEL): All Shaping Methods - Throughput Comparison',
         ylabel='Throughput',
-        save_path=f'{config.RESULTS_DIR}/mc_all_methods_throughput.png'
+        save_path=f'{config.RESULTS_DIR}/mc_all_methods_throughput_parallel.png'
     )
     
     # Plot returns comparison as subplots
     returns_data = {label: data['returns'] for label, data in results.items()}
     plot_returns_subplots(
         returns_data,
-        title_prefix='Monte Carlo: All Shaping Methods',
-        save_path=f'{config.RESULTS_DIR}/mc_all_methods_returns.png'
+        title_prefix='Monte Carlo (PARALLEL): All Shaping Methods',
+        save_path=f'{config.RESULTS_DIR}/mc_all_methods_returns_parallel.png'
     )
-    
-
     
     return results
 
 
-def compare_all_sarsa_methods():
-    """Compare all reward shaping methods for SARSA."""
+def compare_all_sarsa_methods_parallel():
+    """Compare all reward shaping methods for SARSA using parallel execution."""
     print("\n" + "="*70)
-    print("COMPARING ALL SARSA METHODS")
+    print("COMPARING ALL SARSA METHODS (PARALLEL)")
     print("="*70)
     
     # Get config
@@ -396,8 +355,8 @@ def compare_all_sarsa_methods():
         # Get optimized hyperparameters for this shaping method
         hyperparams = config.get_optimized_hyperparams('SARSA', shaping_type)
         
-        # Run with return_best_agent=True to get the trained agent
-        successes, returns, lengths, best_agent, best_env = run_sarsa(
+        # Run with parallel execution - get best agent for visualization
+        successes, returns, lengths, best_agent, best_env = run_sarsa_parallel(
             num_episodes=cfg['num_episodes'],
             num_runs=cfg['num_runs'],
             shaping_type=shaping_type,
@@ -411,7 +370,8 @@ def compare_all_sarsa_methods():
             gamma=cfg['gamma'],
             initial_q_value=config.INITIAL_Q_VALUE,
             shaping_params=config.get_shaping_params(shaping_type, algorithm='SARSA'),
-            return_best_agent=True  # Get the trained agent
+            return_best_agent=True,  # Get the trained agent for visualization
+            n_jobs=-1  # Use all CPU cores
         )
         results[label] = {
             'successes': successes,
@@ -429,137 +389,140 @@ def compare_all_sarsa_methods():
     throughput_data = {label: data['throughput'] for label, data in results.items()}
     plot_comparison(
         throughput_data,
-        title='SARSA: All Shaping Methods - Throughput Comparison',
+        title='SARSA (PARALLEL): All Shaping Methods - Throughput Comparison',
         ylabel='Throughput',
-        save_path=f'{config.RESULTS_DIR}/sarsa_all_methods_throughput.png'
+        save_path=f'{config.RESULTS_DIR}/sarsa_all_methods_throughput_parallel.png'
     )
     
     # Plot returns comparison as subplots
     returns_data = {label: data['returns'] for label, data in results.items()}
     plot_returns_subplots(
         returns_data,
-        title_prefix='SARSA: All Shaping Methods',
-        save_path=f'{config.RESULTS_DIR}/sarsa_all_methods_returns.png'
+        title_prefix='SARSA (PARALLEL): All Shaping Methods',
+        save_path=f'{config.RESULTS_DIR}/sarsa_all_methods_returns_parallel.png'
     )
-    
-
     
     return results
 
 
-def get_overall_best_configuration(mc_results, sarsa_results):
+def get_best_method(results):
     """
-    Identify the best configuration across ALL algorithms and shaping methods.
+    Determine the best method from results based on throughput.
+    
+    Args:
+        results (dict): Dictionary with method names as keys and data as values
+        
+    Returns:
+        tuple: (best_method_label, throughput)
+    """
+    best_throughput = -1
+    best_label = None
+    
+    for label, data in results.items():
+        final_throughput = np.mean(data['throughput'][:, -1])
+        if final_throughput > best_throughput:
+            best_throughput = final_throughput
+            best_label = label
+    
+    return best_label, best_throughput
+
+
+def compare_mc_vs_sarsa_best(mc_results, sarsa_results):
+    """
+    Compare best MC method vs best SARSA method.
     
     Args:
         mc_results (dict): Results from all MC methods
         sarsa_results (dict): Results from all SARSA methods
-        
-    Returns:
-        dict: {
-            'algorithm': 'MC' or 'SARSA',
-            'method_label': str,
-            'shaping_type': str or None,
-            'throughput': float,
-            'data': dict with 'successes', 'returns', 'lengths', 'throughput'
-        }
     """
-    best_config = {
-        'algorithm': None,
-        'method_label': None,
-        'shaping_type': None,
-        'throughput': -1,
-        'data': None
+    print("\n" + "="*70)
+    print("FINAL COMPARISON: BEST MC VS BEST SARSA (PARALLEL)")
+    print("="*70)
+    
+    # Get best methods
+    best_mc_label, mc_throughput = get_best_method(mc_results)
+    best_sarsa_label, sarsa_throughput = get_best_method(sarsa_results)
+    
+    print(f"\n🏆 Best MC method: {best_mc_label}")
+    print(f"🏆 Best SARSA method: {best_sarsa_label}")
+    
+    # Extract data for best methods
+    mc_data = mc_results[best_mc_label]
+    sarsa_data = sarsa_results[best_sarsa_label]
+    
+    mc_returns = mc_data['returns']
+    mc_throughput_array = mc_data['throughput']
+    
+    sarsa_returns = sarsa_data['returns']
+    sarsa_throughput_array = sarsa_data['throughput']
+    
+    # Print comparison table
+    print("\n" + "="*80)
+    print("BEST MC VS BEST SARSA - FINAL COMPARISON")
+    print("="*80)
+    
+    mc_throughput_mean = np.mean(mc_throughput_array[:, -1])
+    mc_throughput_std = np.std(mc_throughput_array[:, -1])
+    sarsa_throughput_mean = np.mean(sarsa_throughput_array[:, -1])
+    sarsa_throughput_std = np.std(sarsa_throughput_array[:, -1])
+    
+    mc_return = np.mean(mc_returns[:, -1])
+    mc_return_std = np.std(mc_returns[:, -1])
+    sarsa_return = np.mean(sarsa_returns[:, -1])
+    sarsa_return_std = np.std(sarsa_returns[:, -1])
+    
+    print(f"\n{'Algorithm':<35} | {'Final Throughput':<20} | {'Avg Return':<15}")
+    print("-" * 80)
+    
+    # Determine winner marker
+    mc_marker = "🏆 " if mc_throughput_mean > sarsa_throughput_mean else "   "
+    sarsa_marker = "🏆 " if sarsa_throughput_mean > mc_throughput_mean else "   "
+    
+    print(f"{mc_marker}{best_mc_label:<33} | "
+          f"{mc_throughput_mean*100:>6.2f}% ± {mc_throughput_std*100:>4.2f}% | "
+          f"{mc_return:>6.3f} ± {mc_return_std:>5.3f}")
+    print(f"{sarsa_marker}{best_sarsa_label:<33} | "
+          f"{sarsa_throughput_mean*100:>6.2f}% ± {sarsa_throughput_std*100:>4.2f}% | "
+          f"{sarsa_return:>6.3f} ± {sarsa_return_std:>5.3f}")
+    print("-" * 80)
+    
+    # Calculate performance difference
+    if sarsa_throughput_mean > mc_throughput_mean:
+        diff = ((sarsa_throughput_mean - mc_throughput_mean) / mc_throughput_mean * 100) if mc_throughput_mean > 0 else float('inf')
+        print(f"\n🏆 SARSA outperforms MC by {diff:+.1f}% ({sarsa_throughput_mean*100:.2f}% vs {mc_throughput_mean*100:.2f}%)")
+    elif mc_throughput_mean > sarsa_throughput_mean:
+        diff = ((mc_throughput_mean - sarsa_throughput_mean) / sarsa_throughput_mean * 100) if sarsa_throughput_mean > 0 else float('inf')
+        print(f"\n🏆 MC outperforms SARSA by {diff:+.1f}% ({mc_throughput_mean*100:.2f}% vs {sarsa_throughput_mean*100:.2f}%)")
+    else:
+        print(f"\n⚖️  MC and SARSA perform equally ({mc_throughput_mean*100:.2f}%)")
+    
+    print("="*80 + "\n")
+    
+    # Plot throughput comparison
+    print("📊 Generating throughput comparison plot...")
+    throughput_data = {
+        f'MC: {best_mc_label}': mc_throughput_array,
+        f'SARSA: {best_sarsa_label}': sarsa_throughput_array
     }
+    plot_comparison(
+        throughput_data,
+        title='Final Comparison (PARALLEL): Best MC vs Best SARSA - Throughput',
+        ylabel='Throughput',
+        save_path=f'{config.RESULTS_DIR}/final_mc_vs_sarsa_throughput_parallel.png'
+    )
     
-    # Shaping type mapping
-    shaping_map = {
-        'Baseline (No Shaping)': None,
-        'Step-Cost Shaping': 'step',
-        'Potential-Based Shaping': 'potential',
-        'Safety-Based Shaping (Custom)': 'safety',
-        'Exploration Bonus (Custom)': 'exploration'
+    # Plot returns comparison
+    print("📊 Generating returns comparison plot...")
+    returns_data = {
+        f'MC: {best_mc_label}': mc_returns,
+        f'SARSA: {best_sarsa_label}': sarsa_returns
     }
-    
-    # Check MC results
-    for label, data in mc_results.items():
-        final_throughput = np.mean(data['throughput'][:, -1])
-        if final_throughput > best_config['throughput']:
-            best_config['algorithm'] = 'MC'
-            best_config['method_label'] = label
-            best_config['shaping_type'] = shaping_map.get(label, None)
-            best_config['throughput'] = final_throughput
-            best_config['data'] = data
-    
-    # Check SARSA results
-    for label, data in sarsa_results.items():
-        final_throughput = np.mean(data['throughput'][:, -1])
-        if final_throughput > best_config['throughput']:
-            best_config['algorithm'] = 'SARSA'
-            best_config['method_label'] = label
-            best_config['shaping_type'] = shaping_map.get(label, None)
-            best_config['throughput'] = final_throughput
-            best_config['data'] = data
-    
-    return best_config
-
-
-def plot_optimal_policy_comparison(algorithm_results, optimal_config, algorithm_name):
-    """
-    Plot the optimal policy (best overall) against all methods for a specific algorithm.
-    
-    Args:
-        algorithm_results (dict): Results for the specific algorithm (MC or SARSA)
-        optimal_config (dict): The overall best configuration from get_overall_best_configuration
-        algorithm_name (str): 'MC' or 'SARSA'
-    """
-    print(f"\n📊 Generating optimal policy comparison for {algorithm_name}...")
-    
-    # Prepare data for plotting
-    plot_data = {}
-    
-    # Add all methods for this algorithm
-    for label, data in algorithm_results.items():
-        plot_data[label] = data['throughput']
-    
-    # Add optimal policy if it's from a different algorithm
-    if optimal_config['algorithm'] != algorithm_name:
-        optimal_label = f"⭐ OPTIMAL: {optimal_config['algorithm']} - {optimal_config['method_label']}"
-        plot_data[optimal_label] = optimal_config['data']['throughput']
-    
-    # Create the plot
-    plt.figure(figsize=(14, 8))
-    
-    for label, data in plot_data.items():
-        mean = np.mean(data, axis=0)
-        std = np.std(data, axis=0)
-        n = data.shape[0]
-        ci = 1.96 * std / np.sqrt(n)
-        
-        episodes = np.arange(1, data.shape[1] + 1)
-        
-        # Use special styling for optimal policy
-        if label.startswith('⭐ OPTIMAL'):
-            plt.plot(episodes, mean, label=label, linewidth=3.5, linestyle='--', color='gold')
-            plt.fill_between(episodes, mean - ci, mean + ci, alpha=0.3, color='gold')
-        else:
-            plt.plot(episodes, mean, label=label, linewidth=2.5)
-            plt.fill_between(episodes, mean - ci, mean + ci, alpha=0.2)
-    
-    plt.xlabel('Episode', fontsize=13)
-    plt.ylabel('Throughput', fontsize=13)
-    plt.title(f'{algorithm_name}: Methods vs Optimal Policy - Throughput Comparison', 
-              fontsize=15, fontweight='bold', pad=15)
-    plt.legend(fontsize=10, loc='best')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    
-    save_path = f'{config.RESULTS_DIR}/{algorithm_name.lower()}_vs_optimal_throughput.png'
-    os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else '.', exist_ok=True)
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Saved: {save_path}")
-    
-    plt.show()
+    plot_comparison(
+        returns_data,
+        title='Final Comparison (PARALLEL): Best MC vs Best SARSA - Returns',
+        ylabel='Real Return',
+        save_path=f'{config.RESULTS_DIR}/final_mc_vs_sarsa_returns_parallel.png'
+    )
 
 
 def visualize_optimal_policies(mc_results, sarsa_results):
@@ -693,119 +656,17 @@ def visualize_optimal_policies(mc_results, sarsa_results):
     draw_policy(ax2, sarsa_agent, f'SARSA\n{best_sarsa_label}')
     
     # Add overall title
-    fig.suptitle('Best Policies Comparison', fontsize=16, fontweight='bold', y=0.98)
+    fig.suptitle('Best Policies Comparison (PARALLEL)', fontsize=16, fontweight='bold', y=0.98)
     
     plt.tight_layout()
     
-    save_path = f'{config.RESULTS_DIR}/best_policies_comparison.png'
+    save_path = f'{config.RESULTS_DIR}/best_policies_comparison_parallel.png'
     os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else '.', exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"✅ Saved side-by-side policy visualization: {save_path}")
     
     plt.show()
     plt.close()
-
-
-def compare_mc_vs_sarsa_best_from_results(mc_results, sarsa_results):
-    """
-    Compare best MC method vs best SARSA method using already collected results.
-    
-    Args:
-        mc_results (dict): Results from all MC methods
-        sarsa_results (dict): Results from all SARSA methods
-    """
-    print("\n" + "="*70)
-    print("FINAL COMPARISON: BEST MC VS BEST SARSA")
-    print("="*70)
-    
-    # Get best methods
-    best_mc_label, best_mc_shaping = get_best_method(mc_results)
-    best_sarsa_label, best_sarsa_shaping = get_best_method(sarsa_results)
-    
-    print(f"\n🏆 Best MC method: {best_mc_label}")
-    print(f"🏆 Best SARSA method: {best_sarsa_label}")
-    
-    # Extract data for best methods
-    mc_data = mc_results[best_mc_label]
-    sarsa_data = sarsa_results[best_sarsa_label]
-    
-    mc_successes = mc_data['successes']
-    mc_returns = mc_data['returns']
-    mc_throughput_array = mc_data['throughput']
-    
-    sarsa_successes = sarsa_data['successes']
-    sarsa_returns = sarsa_data['returns']
-    sarsa_throughput_array = sarsa_data['throughput']
-    
-    # Print comparison table
-    print("\n" + "="*80)
-    print("BEST MC VS BEST SARSA - FINAL COMPARISON")
-    print("="*80)
-    
-    mc_throughput = np.mean(mc_throughput_array[:, -1])
-    mc_throughput_std = np.std(mc_throughput_array[:, -1])
-    sarsa_throughput = np.mean(sarsa_throughput_array[:, -1])
-    sarsa_throughput_std = np.std(sarsa_throughput_array[:, -1])
-    
-    mc_return = np.mean(mc_returns[:, -1])
-    mc_return_std = np.std(mc_returns[:, -1])
-    sarsa_return = np.mean(sarsa_returns[:, -1])
-    sarsa_return_std = np.std(sarsa_returns[:, -1])
-    
-    print(f"\n{'Algorithm':<35} | {'Final Throughput':<20} | {'Avg Return':<15}")
-    print("-" * 80)
-    
-    # Determine winner marker
-    mc_marker = "🏆 " if mc_throughput > sarsa_throughput else "   "
-    sarsa_marker = "🏆 " if sarsa_throughput > mc_throughput else "   "
-    
-    print(f"{mc_marker}{best_mc_label:<33} | "
-          f"{mc_throughput*100:>6.2f}% ± {mc_throughput_std*100:>4.2f}% | "
-          f"{mc_return:>6.3f} ± {mc_return_std:>5.3f}")
-    print(f"{sarsa_marker}{best_sarsa_label:<33} | "
-          f"{sarsa_throughput*100:>6.2f}% ± {sarsa_throughput_std*100:>4.2f}% | "
-          f"{sarsa_return:>6.3f} ± {sarsa_return_std:>5.3f}")
-    print("-" * 80)
-    
-    # Calculate performance difference
-    if sarsa_throughput > mc_throughput:
-        diff = ((sarsa_throughput - mc_throughput) / mc_throughput * 100) if mc_throughput > 0 else float('inf')
-        print(f"\n🏆 SARSA outperforms MC by {diff:+.1f}% ({sarsa_throughput*100:.2f}% vs {mc_throughput*100:.2f}%)")
-    elif mc_throughput > sarsa_throughput:
-        diff = ((mc_throughput - sarsa_throughput) / sarsa_throughput * 100) if sarsa_throughput > 0 else float('inf')
-        print(f"\n🏆 MC outperforms SARSA by {diff:+.1f}% ({mc_throughput*100:.2f}% vs {sarsa_throughput*100:.2f}%)")
-    else:
-        print(f"\n⚖️  MC and SARSA perform equally ({mc_throughput*100:.2f}%)")
-    
-    print("="*80 + "\n")
-    
-    # Plot throughput comparison
-    print("📊 Generating throughput comparison plot...")
-    throughput_data = {
-        f'MC: {best_mc_label}': mc_throughput_array,
-        f'SARSA: {best_sarsa_label}': sarsa_throughput_array
-    }
-    plot_comparison(
-        throughput_data,
-        title='Final Comparison: Best MC vs Best SARSA - Throughput',
-        ylabel='Throughput',
-        save_path=f'{config.RESULTS_DIR}/final_mc_vs_sarsa_throughput.png'
-    )
-    
-    # Plot returns comparison
-    print("📊 Generating returns comparison plot...")
-    returns_data = {
-        f'MC: {best_mc_label}': mc_returns,
-        f'SARSA: {best_sarsa_label}': sarsa_returns
-    }
-    plot_comparison(
-        returns_data,
-        title='Final Comparison: Best MC vs Best SARSA - Returns',
-        ylabel='Real Return',
-        save_path=f'{config.RESULTS_DIR}/final_mc_vs_sarsa_returns.png'
-    )
-    
-
 
 
 if __name__ == "__main__":
@@ -817,68 +678,62 @@ if __name__ == "__main__":
         print(f"\n🔒 Random seed set to {config.RANDOM_SEED} for reproducibility")
     
     print("\n" + "="*70)
-    print("COMPREHENSIVE REWARD SHAPING COMPARISON (ENHANCED)")
+    print("COMPREHENSIVE REWARD SHAPING COMPARISON (PARALLEL)")
     print("="*70)
     
     # Print current configuration
     config.print_config()
     
     print("\nThis script will:")
-    print("  1. Compare all MC shaping methods")
-    print("  2. Compare all SARSA shaping methods")
+    print("  1. Compare all MC shaping methods (PARALLEL)")
+    print("  2. Compare all SARSA shaping methods (PARALLEL)")
     print("  3. Generate final comparison (Best MC vs Best SARSA)")
-    print("  4. Identify overall best configuration and visualize policies")
+    print("  4. Visualize optimal policies")
     print("\nFeatures:")
-    print("  ✅ Progress bars for tracking")
+    print("  ✅ Parallel execution for maximum speed")
+    print("  ✅ Progress tracking")
     print("  ✅ Summary tables after each algorithm")
     print("  ✅ Automatic best method detection")
-    print("  ✅ Optimal policy identification and comparison")
     print("  ✅ Policy visualization (action arrows on grid)")
-    print("  ✅ No redundant re-runs for final comparison")
+    print("  ✅ All plots and visualizations")
     print("="*70)
+    
+    import time
+    start_time = time.time()
     
     # Compare all MC methods
-    print("\n[1/4] Comparing all Monte Carlo methods...")
-    mc_results = compare_all_mc_methods()
+    print("\n[1/4] Comparing all Monte Carlo methods (PARALLEL)...")
+    mc_results = compare_all_mc_methods_parallel()
     
     # Compare all SARSA methods
-    print("\n[2/4] Comparing all SARSA methods...")
-    sarsa_results = compare_all_sarsa_methods()
+    print("\n[2/4] Comparing all SARSA methods (PARALLEL)...")
+    sarsa_results = compare_all_sarsa_methods_parallel()
     
-    # Generate final comparison using saved results
+    # Generate final comparison
     print("\n[3/4] Generating final comparison (Best MC vs Best SARSA)...")
-    compare_mc_vs_sarsa_best_from_results(mc_results, sarsa_results)
-    
-    # Identify overall best configuration
-    print("\n[4/4] Identifying overall best configuration and visualizing policies...")
-    optimal_config = get_overall_best_configuration(mc_results, sarsa_results)
-    
-    print("\n" + "="*70)
-    print("OVERALL BEST CONFIGURATION (OPTIMAL POLICY)")
-    print("="*70)
-    print(f"\n🏆 Algorithm: {optimal_config['algorithm']}")
-    print(f"🏆 Method: {optimal_config['method_label']}")
-    print(f"🏆 Shaping Type: {optimal_config['shaping_type'] if optimal_config['shaping_type'] else 'None (Baseline)'}")
-    print(f"🏆 Final Throughput: {optimal_config['throughput']*100:.2f}%")
-    print("="*70)
+    compare_mc_vs_sarsa_best(mc_results, sarsa_results)
     
     # Visualize learned policies
-    print("\n🎯 Generating policy visualizations (action arrows on grid)...")
+    print("\n[4/4] Generating policy visualizations...")
     visualize_optimal_policies(mc_results, sarsa_results)
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
     
     print("\n" + "="*70)
     print("ALL COMPARISONS COMPLETED ✅")
     print("="*70)
+    print(f"\n⏱️  Total execution time: {elapsed_time/60:.2f} minutes ({elapsed_time:.1f} seconds)")
     print(f"\nResults saved in '{config.RESULTS_DIR}/' directory.")
     print("\n📊 Review the summary tables above for key findings!")
     print("📈 Check the plots for detailed comparisons!")
     print("\nGenerated plots:")
-    print("  • mc_all_methods_throughput.png")
-    print("  • mc_all_methods_returns.png")
-    print("  • sarsa_all_methods_throughput.png")
-    print("  • sarsa_all_methods_returns.png")
-    print("  • final_mc_vs_sarsa_throughput.png  ⭐")
-    print("  • final_mc_vs_sarsa_returns.png     ⭐")
+    print("  • mc_all_methods_throughput_parallel.png")
+    print("  • mc_all_methods_returns_parallel.png")
+    print("  • sarsa_all_methods_throughput_parallel.png")
+    print("  • sarsa_all_methods_returns_parallel.png")
+    print("  • final_mc_vs_sarsa_throughput_parallel.png  ⭐")
+    print("  • final_mc_vs_sarsa_returns_parallel.png     ⭐")
     print("\nGenerated policy visualizations:")
-    print("  • best_policies_comparison.png      🎯")
+    print("  • best_policies_comparison_parallel.png      🎯")
     print("="*70)
