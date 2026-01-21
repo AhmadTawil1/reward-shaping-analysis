@@ -1,5 +1,10 @@
 """
-Multi-run Monte Carlo experiments with reward shaping.
+Monte Carlo Training - Sequential Execution
+
+Trains Monte Carlo agents one run at a time (sequential execution).
+Slower than parallel version but easier to debug and inspect individual runs.
+
+Use this for debugging or small tests. For full experiments, use run_monte_carlo_parallel.py.
 """
 
 import numpy as np

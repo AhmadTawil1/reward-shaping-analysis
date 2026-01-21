@@ -1,8 +1,11 @@
 """
-Multi-run Monte Carlo experiments with reward shaping - PARALLEL VERSION.
+Monte Carlo Training - Parallel Execution
 
-This version uses joblib to run multiple experiments in parallel,
-significantly reducing total execution time.
+Trains Monte Carlo agents across multiple independent runs using parallel processing.
+Each run uses a different random seed to ensure statistical validity.
+Aggregates results (success rates, returns, episode lengths) for analysis.
+
+Use this for production experiments. For debugging, use run_monte_carlo.py instead.
 """
 
 import numpy as np

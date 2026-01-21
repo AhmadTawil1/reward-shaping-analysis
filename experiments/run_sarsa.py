@@ -1,5 +1,10 @@
 """
-Multi-run SARSA experiments with reward shaping.
+SARSA Training - Sequential Execution
+
+Trains SARSA agents one run at a time (sequential execution).
+Slower than parallel version but easier to debug and inspect individual runs.
+
+Use this for debugging or small tests. For full experiments, use run_sarsa_parallel.py.
 """
 
 import numpy as np
