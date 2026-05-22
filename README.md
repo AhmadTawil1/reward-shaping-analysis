@@ -1,371 +1,278 @@
-# Reward Shaping Analysis for Reinforcement Learning
+# Reward Shaping Analysis in Reinforcement Learning
+### A Comparative Study of Monte Carlo and SARSA
 
-A comprehensive analysis framework for evaluating different reward shaping techniques in reinforcement learning, specifically applied to the FrozenLake environment using Monte Carlo and SARSA algorithms.
+> **Authors:** Ahmad Tawil · Yosef Jirees &nbsp;|&nbsp; January 2026
 
-## 📋 Overview
+---
 
-This project implements and compares five different reward shaping methods to improve learning efficiency in reinforcement learning agents. The framework includes parallel execution, extensive visualization tools, and automated hyperparameter optimization.
+## Overview
 
-### Key Features
+This project investigates how **reward shaping** affects reinforcement learning performance in a stochastic grid-world. We implement two fundamental RL algorithms from scratch — **Every-Visit Monte Carlo Control** and **SARSA(0)** — and evaluate five reward shaping strategies on the FrozenLake environment.
 
-- **5 Reward Shaping Methods**: Baseline, Step-Cost, Potential-Based, Safety-Based, and Exploration Bonus
-- **2 RL Algorithms**: Monte Carlo and SARSA
-- **Parallel Execution**: 6-9x faster training using multi-core processing
-- **Comprehensive Visualization**: Policy evolution, learning curves, and agent demonstrations
-- **Automated Analysis**: Statistical comparison with 95% confidence intervals
-- **Reproducible Results**: Controlled random seeds for consistent experiments
+**Top result:** SARSA + Safety-Based Shaping achieves **71.46% throughput** — a **+42.1% improvement** over the unguided baseline.
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
+## Live Demo — SARSA Safety-Based Agent
 
-```bash
-Python 3.8+
-pip install -r requirements.txt
+<p align="center">
+  <img src="results/agent_demos/sarsa_safety_best.gif" width="420" alt="SARSA Safety-Based Agent navigating FrozenLake"/>
+</p>
+<p align="center"><em>SARSA + Safety-Based Shaping navigating the stochastic FrozenLake (70% action success rate)</em></p>
+
+---
+
+## Environment
+
+<p align="center">
+  <img src="results/frozenlake_environment.png" width="360" alt="FrozenLake 6x6 Environment"/>
+</p>
+
+| Parameter | Value |
+|-----------|-------|
+| Grid Size | 6 × 6 (36 states) |
+| Hole Density | 15% (5 holes) |
+| Dynamics | Stochastic — 70% success rate |
+| Discount Factor | γ = 1.0 |
+| Goal Reward | +1 (sparse) |
+
+The agent must navigate from **S** (top-left) to **G** (bottom-right) while avoiding holes. With **30% slip probability**, actions frequently result in perpendicular movement — making this a hard sparse-reward problem.
+
+---
+
+## Reward Shaping Methods
+
+All shaped rewards use the **potential-based form** `F(s,a,s') = β(γΦ(s') − Φ(s))`, which guarantees policy invariance in theory.
+
+| # | Method | Potential Φ(s) | Core Idea |
+|---|--------|---------------|-----------|
+| 1 | **Baseline** | — | No shaping; sparse +1 at goal only |
+| 2 | **Step-Cost** | — | Fixed penalty `c` per step encourages shorter paths |
+| 3 | **Potential-Based Distance** | `−d(s)` | Manhattan distance gradient pulls agent toward goal |
+| 4 | **Safety-Based (Custom #1)** | `min_h d(s,h)` | Distance from nearest hole — avoids hazards |
+| 5 | **Exploration Bonus (Custom #2)** | `−√(count(s)+1)` | Novelty bonus decaying with revisits |
+
+---
+
+## Results
+
+### Monte Carlo — All Shaping Methods
+
+<p align="center">
+  <img src="results/mc_all_methods_throughput_parallel.png" width="820" alt="Monte Carlo Throughput Comparison"/>
+</p>
+
+| Method | Throughput | Avg Return |
+|--------|:----------:|:----------:|
+| **Safety-Based (Custom)** | **47.71% ± 5.76%** | **0.400 ± 0.490** |
+| Baseline | 44.30% ± 5.36% | 0.600 ± 0.477 |
+| Potential-Based | 43.60% ± 4.32% | 0.400 ± 0.490 |
+| Exploration Bonus | 29.18% ± 2.11% | 0.450 ± 0.497 |
+| Step-Cost | 15.47% ± 16.67% | 0.200 ± 0.400 |
+
+---
+
+### SARSA — All Shaping Methods
+
+<p align="center">
+  <img src="results/sarsa_all_methods_throughput_parallel.png" width="820" alt="SARSA Throughput Comparison"/>
+</p>
+
+| Method | Throughput | Avg Return |
+|--------|:----------:|:----------:|
+| **Safety-Based (Custom)** | **71.46% ± 2.74%** | **0.650 ± 0.477** |
+| Potential-Based | 59.32% ± 6.68% | 0.850 ± 0.357 |
+| Exploration Bonus | 57.81% ± 0.89% | 0.400 ± 0.490 |
+| Baseline | 50.29% ± 5.90% | 0.800 ± 0.400 |
+| Step-Cost | 30.10% ± 14.13% | 0.650 ± 0.477 |
+
+---
+
+### Best MC vs Best SARSA — Final Comparison
+
+<p align="center">
+  <img src="results/final_mc_vs_sarsa_throughput_parallel.png" width="720" alt="Final MC vs SARSA Comparison"/>
+</p>
+
+**SARSA + Safety-Based Shaping** outperforms **MC + Safety-Based** by **+49.8%** (71.46% vs 47.71%).  
+SARSA's step-level updates let it incorporate shaping signals immediately; MC must wait until episode completion.
+
+---
+
+### Learned Policies
+
+<p align="center">
+  <img src="results/best_policies_comparison_parallel.png" width="840" alt="Best Policies Comparison"/>
+</p>
+
+| | MC + Safety | SARSA + Safety |
+|-|:-----------:|:--------------:|
+| Q-value range | −0.11 to 1.01 (some negative) | 0.41 to 1.06 (all positive) |
+| Confidence | Uncertain near holes | Clear gradients toward goal |
+
+---
+
+### Policy Evolution During Training
+
+<p align="center">
+  <img src="results/agent_demos/policy_evolution.png" width="720" alt="Policy Evolution During Training"/>
+</p>
+
+<p align="center"><em>Policy snapshots at episodes 1 · 100 · 1000 · 10,000 — showing convergence from random to optimal</em></p>
+
+---
+
+## Hyperparameter Sensitivity
+
+### ε Sensitivity — SARSA + Safety
+
+<p align="center">
+  <img src="results/epsilon_sensitivity_throughput.png" width="680" alt="Epsilon Sensitivity"/>
+</p>
+
+| ε | Throughput |
+|:-:|:----------:|
+| **0.05** | **48.79% ± 2.16%** |
+| 0.2 | 37.89% ± 3.87% |
+| 0.5 | 17.98% ± 0.57% |
+
+The environment's 30% slippage provides ~33% effective exploration at ε = 0.05 — sufficient without hurting convergence.
+
+### α Sensitivity — SARSA + Safety
+
+<p align="center">
+  <img src="results/alpha_sensitivity_throughput.png" width="680" alt="Alpha Sensitivity"/>
+</p>
+
+| α | Throughput |
+|:-:|:----------:|
+| **0.2** | **70.89% ± 3.54%** |
+| 0.5 | 58.68% ± 0.65% |
+| 0.05 | 48.79% ± 2.16% |
+
+α = 0.2 balances fast adaptation with stability — critical in a high-variance stochastic environment.
+
+---
+
+## Key Findings
+
+1. **SARSA + Safety-Based Shaping is optimal** — 71.46% throughput, best across all 10 configurations
+2. **Shaping effectiveness is algorithm-dependent** — Safety shaping gives SARSA +42.1% but only MC +7.7%
+3. **SARSA baseline beats all MC variants** — 50.29% vs 47.71% (best MC), showing TD learning's stochastic advantage
+4. **Step-cost backfires** — Penalty accumulation from slippage causes hole-seeking; high variance (±14–17%) reflects bimodal behavior
+5. **Potential-based shaping helps SARSA** — +18% over SARSA baseline (59.32% vs 50.29%), though safety guidance is more effective
+
+---
+
+## Algorithms
+
+### Every-Visit Monte Carlo Control
+Updates Q-values after **complete episodes** — must wait for full return G before learning:
+```
+Q(s,a) ← Q(s,a) + α[G − Q(s,a)]     where G = Σ γᵗ Rₜ
 ```
 
-### Installation
+### SARSA(0)
+Updates Q-values after **each step** — immediately bootstraps from next state:
+```
+Q(s,a) ← Q(s,a) + α[r + γQ(s',a') − Q(s,a)]
+```
+
+Both use **ε-greedy action selection** with per-method optimized hyperparameters (selected via grid search over ε ∈ {0.05, 0.1, 0.2}, α ∈ {0.05, 0.1, 0.2}).
+
+---
+
+## Quick Start
+
+**Requirements:** Python 3.8+, 8 GB RAM
 
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/AhmadTawil1/reward-shaping-analysis.git
 cd reward-shaping-analysis
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate        # Linux / Mac
+venv\Scripts\activate           # Windows
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Basic Usage
-
-Run the complete comparison (recommended):
+### Run Experiments (in order)
 
 ```bash
+# 1. Main comparison — all methods, all shapings (~15-30 min, parallel)
 python compare_methods_parallel.py
+
+# 2. Epsilon and Alpha sensitivity analysis (~10-15 min)
+python hyperparameters_sweep.py
+
+# 3. Beta sensitivity for potential-based shaping (~5-10 min)
+python beta_comparison.py
+
+# 4. Policy evolution + animated GIF (~5-10 min)
+python test_agent_rendering.py
 ```
 
-This will:
-1. Train 5 reward shaping methods with Monte Carlo (20 runs each, parallel)
-2. Train 5 reward shaping methods with SARSA (20 runs each, parallel)
-3. Generate comparison plots and statistics
-4. Visualize optimal policies
-5. Save all results to `results/` directory
+> Use `compare_methods.py` instead for sequential execution (easier debugging, lower memory).
 
-**Expected runtime:** 5-10 minutes (with parallel execution)
+---
 
-## 📊 Project Structure
+## Project Structure
 
 ```
 reward-shaping-analysis/
-├── algorithms/              # RL algorithm implementations
-│   ├── monte_carlo.py      # Monte Carlo agent
-│   └── sarsa.py            # SARSA agent
-├── env/                    # Environment and wrappers
-│   ├── frozenlake_env.py   # Custom FrozenLake environment
-│   ├── reward_shaping.py   # Reward shaping implementations
-│   └── metrics_wrapper.py  # Metrics tracking wrapper
-├── experiments/            # Experiment runners
+├── algorithms/
+│   ├── monte_carlo.py              # Every-Visit MC Control
+│   └── sarsa.py                    # SARSA(0)
+├── env/
+│   ├── frozenlake_env.py           # Environment wrapper
+│   ├── reward_shaping.py           # All 5 shaping implementations
+│   └── metrics_wrapper.py          # Metrics tracking
+├── experiments/
 │   ├── run_monte_carlo_parallel.py
 │   ├── run_sarsa_parallel.py
-│   └── find_best_hyperparameters.py
-├── utils/                  # Utility functions
-│   ├── visualization.py    # Policy visualization tools
-│   ├── agent_rendering.py  # Animated GIF generation
-│   └── metrics.py          # Performance metrics
-├── results/                # Generated plots and data
-├── config.py               # Configuration and hyperparameters
-├── compare_methods_parallel.py  # Main comparison script
-└── test_agent_rendering.py      # Policy evolution visualization
+│   └── ...
+├── utils/
+│   ├── metrics.py                  # Throughput & return computation
+│   ├── plotting.py                 # Learning curve visualization
+│   └── visualization.py            # Policy grid visualization
+├── results/
+│   ├── agent_demos/
+│   │   ├── sarsa_safety_best.gif   # Animated agent demo
+│   │   └── policy_evolution.png    # Training snapshots
+│   └── *.png                       # All experiment plots
+├── config.py                       # All hyperparameters (single source of truth)
+├── compare_methods_parallel.py     # Main experiment script
+├── hyperparameters_sweep.py        # ε/α sensitivity study
+├── beta_comparison.py              # β sensitivity study
+├── find_best_hyperparameters.py    # Grid search for best params
+└── report.tex                      # Full LaTeX report
 ```
-
-## 🎯 Reward Shaping Methods
-
-### 1. Baseline (No Shaping)
-Standard reward: +1 for goal, 0 otherwise
-
-### 2. Step-Cost Shaping
-Penalizes each step to encourage efficiency
-- Formula: `r_shaped = r_original - step_cost`
-
-### 3. Potential-Based Shaping
-Uses distance-based potential function
-- Formula: `r_shaped = r_original + γΦ(s') - Φ(s)`
-- Φ(s) = negative Manhattan distance to goal
-
-### 4. Safety-Based Shaping (Custom)
-Rewards safe exploration, penalizes holes
-- Bonus for avoiding holes
-- Penalty for approaching dangerous states
-
-### 5. Exploration Bonus (Custom)
-Encourages visiting new states
-- Bonus for first-time state visits
-- Decays over time
-
-## 📈 Results and Visualization
-
-### Generated Outputs
-
-After running `compare_methods_parallel.py`, you'll get:
-
-**Plots:**
-- `mc_all_methods_throughput_parallel.png` - Monte Carlo throughput comparison
-- `mc_all_methods_returns_parallel.png` - Monte Carlo returns comparison
-- `sarsa_all_methods_throughput_parallel.png` - SARSA throughput comparison
-- `sarsa_all_methods_returns_parallel.png` - SARSA returns comparison
-- `final_mc_vs_sarsa_throughput_parallel.png` - Best method comparison
-- `final_mc_vs_sarsa_returns_parallel.png` - Best method returns
-- `best_policies_comparison_parallel.png` - Policy visualization
-
-**Console Output:**
-- Summary tables with mean ± std for each method
-- Statistical significance tests
-- Best method identification
-- Performance improvements over baseline
-
-### Interpreting Results
-
-**Throughput**: Cumulative success rate over episodes
-- Formula: `throughput[t] = (total_successes_up_to_t) / t`
-- Higher is better (closer to 100%)
-- Shows learning efficiency
-
-**Returns**: Real (unshaped) rewards received
-- Shows actual task performance
-- Not affected by shaping rewards
-
-**95% Confidence Intervals**: Shown as shaded areas in plots
-- Calculated as: `mean ± 1.96 × (std / √20)`
-- Non-overlapping CIs indicate statistical significance
-
-## 🔬 Advanced Usage
-
-### Policy Evolution Visualization
-
-Generate policy snapshots at episodes 1, 100, 1000, 10000:
-
-```bash
-python test_agent_rendering.py
-```
-
-Outputs:
-- `policy_evolution.png` - 2×2 grid showing learning progress
-- `sarsa_safety_best.gif` - Animated demonstration of best agent
-
-### Beta Sensitivity Analysis
-
-Analyze how the beta parameter affects Safety-Based and Exploration Bonus shaping:
-
-```bash
-python beta_comparison.py
-```
-
-This compares different beta values (0.01, 0.05, 0.1, 0.5) to find the optimal shaping strength.
-
-Outputs:
-- `mc_beta_comparison.png` - Monte Carlo beta sensitivity
-- `sarsa_beta_comparison.png` - SARSA beta sensitivity
-- Console tables showing performance for each beta value
-
-**Beta Parameter:**
-- Controls the strength of reward shaping
-- Lower values (0.01): Subtle shaping, closer to original rewards
-- Higher values (0.5): Strong shaping, may dominate original rewards
-- Optimal value balances learning speed and final performance
-
-### Hyperparameter Sensitivity Analysis
-
-Visualize how epsilon and alpha affect learning:
-
-```bash
-python hyperparameters_sweep.py
-```
-
-This runs a grid search over:
-- **Epsilon values**: 0.01, 0.05, 0.1, 0.2 (exploration rate)
-- **Alpha values**: 0.01, 0.05, 0.1, 0.2 (learning rate, SARSA only)
-
-Outputs:
-- `epsilon_sensitivity.png` - Individual subplots for each epsilon value
-- `alpha_sensitivity.png` - Individual subplots for each alpha value (SARSA)
-- Shows returns over episodes for each parameter combination
-
-**Use cases:**
-- Finding optimal hyperparameters for your environment
-- Understanding exploration-exploitation tradeoff
-- Tuning learning rate for stability vs. speed
-
-### Custom Experiments
-
-Modify `config.py` to adjust:
-- Grid size: `GRID_ROWS`, `GRID_COLS`
-- Hole density: `HOLE_DENSITY`
-- Episodes: `FINAL_EPISODES`
-- Number of runs: `FINAL_RUNS`
-- Hyperparameters: `OPTIMIZED_HYPERPARAMS`
-
-### Hyperparameter Tuning
-
-Find optimal hyperparameters:
-
-```bash
-python experiments/find_best_hyperparameters.py
-```
-
-## 🧪 Experimental Setup
-
-### Environment Configuration
-- **Grid Size**: 6×6
-- **Hole Density**: 15%
-- **Slippery**: Yes (stochastic transitions)
-- **Success Rate**: 70% (action success probability)
-- **Random Seed**: 242 (for reproducibility)
-
-### Training Configuration
-- **Episodes per run**: 10,000
-- **Independent runs**: 20
-- **Execution**: Parallel (all CPU cores)
-- **Algorithms**: Monte Carlo, SARSA
-
-### Hyperparameters (Optimized)
-```python
-Monte Carlo:
-  - epsilon: 0.05 (exploration rate)
-  - gamma: 1.0 (discount factor)
-
-SARSA:
-  - epsilon: 0.05
-  - alpha: 0.05 (learning rate)
-  - gamma: 1.0
-```
-
-## 📊 Performance Metrics
-
-### Throughput
-- **Definition**: Cumulative success rate
-- **Calculation**: `(successes_so_far) / (episodes_so_far)`
-- **Range**: 0-100%
-- **Interpretation**: Higher = better learning efficiency
-
-### Real Return
-- **Definition**: Actual rewards (without shaping)
-- **Calculation**: Sum of original environment rewards
-- **Interpretation**: True task performance
-
-### Episode Length
-- **Definition**: Steps taken per episode
-- **Interpretation**: Shorter = more efficient policy
-
-## 🔧 Configuration
-
-All configuration is centralized in `config.py`:
-
-```python
-# Environment
-GRID_ROWS = 6
-GRID_COLS = 6
-HOLE_DENSITY = 0.15
-IS_SLIPPERY = True
-SUCCESS_RATE = 0.7
-
-# Training
-FINAL_EPISODES = 10000
-FINAL_RUNS = 20
-RANDOM_SEED = 242
-
-# Hyperparameters
-OPTIMIZED_HYPERPARAMS = {
-    'MC': {'safety': {'epsilon': 0.05, 'gamma': 1.0}},
-    'SARSA': {'safety': {'epsilon': 0.05, 'alpha': 0.05, 'gamma': 1.0}}
-}
-```
-
-## 🎨 Visualization Tools
-
-### Static Policy Visualization
-```python
-from utils.visualization import visualize_grid
-
-visualize_grid(env, policy, value_function, 
-               title="Learned Policy",
-               save_path="policy.png")
-```
-
-### Animated Agent Demonstration
-```python
-from utils.agent_rendering import create_agent_demo
-
-create_agent_demo(agent, 
-                 save_path="agent_demo.gif",
-                 fps=2)
-```
-
-### Learning Curves
-```python
-from utils.visualization import compare_policies
-
-compare_policies(env, policies_dict, 
-                value_functions_dict,
-                title="Policy Comparison")
-```
-
-## 📝 Key Findings
-
-Based on experimental results:
-
-1. **Safety-Based Shaping** typically achieves highest throughput
-2. **Exploration Bonus** shows fastest early learning
-3. **Potential-Based** provides consistent improvement over baseline
-4. **Step-Cost** encourages efficient paths
-5. **SARSA** generally outperforms Monte Carlo in this environment
-
-## 🤝 Contributing
-
-Contributions are welcome! Areas for improvement:
-- Additional reward shaping methods
-- More RL algorithms (Q-Learning, DQN, etc.)
-- Different environments
-- Advanced visualization techniques
-
-
-## 🙏 Acknowledgments
-
-- Built using [Gymnasium](https://gymnasium.farama.org/)
-- Parallel execution with [joblib](https://joblib.readthedocs.io/)
-- Visualization with [matplotlib](https://matplotlib.org/)
-
-
 
 ---
 
-## 🚀 Quick Reference
+## Configuration
 
-### Most Common Commands
+All parameters are centralized in `config.py`:
 
-```bash
-# Full comparison (recommended)
-python compare_methods_parallel.py
-
-# Policy evolution visualization
-python test_agent_rendering.py
-
-# Beta sensitivity analysis
-python beta_comparison.py
-
-# Hyperparameter sweep
-python hyperparameters_sweep.py
-
-# Hyperparameter tuning
-python experiments/find_best_hyperparameters.py
+```python
+GRID_ROWS, GRID_COLS = 6, 6   # Environment dimensions
+HOLE_DENSITY        = 0.15    # 15% holes
+IS_SLIPPERY         = True    # Stochastic dynamics
+SUCCESS_RATE        = 0.7     # 70% action success probability
+FINAL_EPISODES      = 10000   # Episodes per run
+FINAL_RUNS          = 20      # Independent runs (for 95% CI)
+RANDOM_SEED         = 242     # Reproducibility seed
 ```
 
-### Troubleshooting
-
-**Issue**: Tkinter warnings during parallel execution
-**Solution**: Add `matplotlib.use('Agg')` before importing pyplot
-
-**Issue**: Out of memory
-**Solution**: Reduce `FINAL_RUNS` or `FINAL_EPISODES` in config.py
-
-**Issue**: Slow execution
-**Solution**: Ensure parallel version is being used (compare_methods_parallel.py)
+For quick testing: set `TEST_MODE = True` (1000 episodes, 5 runs).
 
 ---
 
-**Last Updated**: January 2026
+## References
+
+1. Ng, A. Y., Harada, D., & Russell, S. (1999). *Policy invariance under reward transformations: Theory and application to reward shaping*. ICML, Vol. 99, pp. 278–287.
+2. Sutton, R. S., & Barto, A. G. (2018). *Reinforcement learning: An introduction* (2nd ed.). MIT Press.

@@ -17,7 +17,7 @@ Settings:
 Expected Runtime: ~1-2 hours total
 
 Usage:
-    python -m experiments.find_best_hyperparameters
+    python find_best_hyperparameters.py
     
 Output:
     best_hyperparameters.json - Use this in compare_methods.py

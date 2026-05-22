@@ -1,0 +1,629 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{multirow}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% Title information
+\title{\textbf{Reward Shaping Analysis in Reinforcement Learning:\\A Comparative Study of Monte Carlo and SARSA}}
+\author{Ahmad Tawil \and Yosef Jirees}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper investigates the effects of reward shaping on reinforcement learning performance in a stochastic grid-world environment. We implement and compare two fundamental RL algorithms---Every-Visit Monte Carlo Control and SARSA(0)---under various reward shaping strategies. Our experimental results demonstrate that safety-based shaping significantly improves learning efficiency, with SARSA achieving 71.46\% throughput compared to Monte Carlo's 47.71\%. We conduct comprehensive hyperparameter sensitivity analyses and provide insights into the exploration-exploitation tradeoff inherent in these methods.
+\end{abstract}
+
+\section{Introduction}
+
+Reward shaping is a technique used to accelerate learning in reinforcement learning by modifying the reward signal without changing the underlying task \cite{ng1999policy}. The shaped reward is defined as:
+\begin{equation}
+R'(s,a,s') = R(s,a,s') + F(s,a,s')
+\end{equation}
+where $F$ is the shaping function designed by the practitioner. A special class of shaping functions, called \emph{potential-based shaping}, guarantees policy invariance:
+\begin{equation}
+F(s,a,s') = \gamma\Phi(s') - \Phi(s)
+\end{equation}
+where $\Phi(s)$ is an arbitrary potential function.
+
+In this work, we explore how different shaping strategies affect learning speed, throughput, and convergence in a challenging stochastic environment.
+
+\section{Experimental Setup}
+
+\subsection{Environment}
+
+We use the FrozenLake environment from Gymnasium with the following configuration:
+\begin{itemize}
+    \item \textbf{Grid Size:} $6 \times 6$ (36 total states)
+    \item \textbf{Hole Density:} 15\% (5 holes)
+    \item \textbf{Dynamics:} Slippery with success rate 0.7
+    \item \textbf{Discount Factor:} $\gamma = 1.0$ (as required)
+    \item \textbf{Random Seed:} 242 (for reproducibility)
+\end{itemize}
+
+The environment presents a challenging navigation problem where the agent must reach the goal while avoiding holes. The stochastic dynamics ($p_{\text{success}} = 0.7$) mean that 30\% of the time, actions result in perpendicular movement, significantly complicating the learning task. The agent receives a reward of +1 for reaching the goal and 0 otherwise.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.45\textwidth]{environment_grid.png}
+\caption{FrozenLake 6×6 environment with 15\% hole density.}
+\label{fig:environment}
+\end{figure}
+
+\subsection{Algorithms}
+
+We implement two fundamental RL algorithms from scratch:
+
+\subsubsection{Every-Visit Monte Carlo Control}
+Updates Q-values after complete episodes using:
+\begin{equation}
+Q(s,a) \leftarrow Q(s,a) + \alpha[G - Q(s,a)]
+\end{equation}
+where $G = \sum_{t=0}^T \gamma^t R_t$ is the return and $\alpha$ is the learning rate.
+
+\subsubsection{SARSA(0)}
+On-policy TD control that updates after each step:
+\begin{equation}
+Q(s,a) \leftarrow Q(s,a) + \alpha[r + \gamma Q(s',a') - Q(s,a)]
+\end{equation}
+
+Both algorithms use $\epsilon$-greedy action selection with optimized hyperparameters per method (Table~\ref{tab:hyperparams}).
+
+\subsection{Reward Shaping Methods}
+
+We evaluate five reward shaping strategies:
+
+\paragraph{1. Baseline (No Shaping)} 
+The original environment reward: $R'(s,a,s') = R(s,a,s')$.
+
+\textbf{Intuition:} This serves as our control condition. The agent receives only the sparse goal reward (+1 at the goal, 0 elsewhere), forcing it to learn purely from eventual success or failure. This tests whether the algorithms can learn effectively without additional guidance, but the sparse reward signal makes credit assignment challenging---the agent must connect its early decisions to the final outcome without intermediate feedback.
+
+\paragraph{2. Step-Cost Shaping}
+Adds a small penalty per step to encourage shorter paths:
+\begin{equation}
+R'(s,a,s') = R(s,a,s') + c
+\end{equation}
+where $c = -0.01$ (MC) or $c = -0.005$ (SARSA).
+
+\textbf{Intuition:} By penalizing each step, we discourage the agent from wandering aimlessly and encourage finding the shortest path to the goal. In deterministic environments, this often works well. However, in stochastic environments like ours (70\% success rate), the agent may take many unintended steps due to slippage, accumulating penalties for actions beyond its control. This can make the goal reward seem less attractive relative to the accumulated penalties, potentially causing unintended behaviors.
+
+\paragraph{3. Potential-Based Distance Shaping}
+Uses Manhattan distance to the goal as the potential function:
+\begin{equation}
+\Phi(s) = -d(s), \quad F(s,a,s') = \beta(\gamma\Phi(s') - \Phi(s))
+\end{equation}
+where $d(s)$ is the Manhattan distance to the goal and $\beta$ controls shaping strength.
+
+\textbf{Intuition:} States closer to the goal have higher potential (less negative), so moving toward the goal yields positive shaping rewards. This provides a ``compass'' pointing toward the goal at every step. The potential-based formulation guarantees that the optimal policy remains unchanged in theory---we're only providing hints about direction, not changing what the best behavior is. However, this guidance ignores obstacles (holes), potentially leading the agent toward dangerous paths that happen to be geometrically closer to the goal.
+
+\paragraph{4. Safety-Based Shaping (Custom \#1)}
+Our first custom method encourages the agent to maintain distance from holes:
+\begin{equation}
+\Phi(s) = \min_{h \in H} d(s,h), \quad F(s,a,s') = \beta(\gamma\Phi(s') - \Phi(s))
+\end{equation}
+where $H$ is the set of hole positions, with $\beta = 0.05$.
+
+\textbf{Intuition:} In a stochastic environment with holes, safety is crucial. This potential-based shaping biases exploration toward safer regions while preserving the optimal policy theoretically. States farther from holes have higher potential, so moving away from holes yields positive shaping rewards. Unlike distance-based shaping that ignores obstacles, safety shaping explicitly accounts for the environment's hazards, encouraging the agent to find paths that maintain a safety buffer around dangerous states.
+
+\paragraph{5. Exploration Bonus Shaping (Custom \#2)}
+Our second custom method provides novelty bonuses based on state visitation counts:
+\begin{equation}
+\Phi(s) = -\sqrt{\text{count}(s) + 1}, \quad F(s,a,s') = \beta(\gamma\Phi(s') - \Phi(s))
+\end{equation}
+where $\text{count}(s)$ is the number of times state $s$ has been visited, with $\beta = 0.05$ (MC) or $\beta = 0.02$ (SARSA).
+
+\textbf{Intuition:} Novel states have higher potential (less negative), so moving to unexplored states yields positive shaping. This encourages diverse exploration, particularly beneficial for Monte Carlo which learns from complete episodes. The square root provides diminishing returns as states are revisited. \emph{Visit counts persist across episodes} (critical for MC's episodic learning).
+
+\subsection{Evaluation Metrics}
+
+We use two primary metrics:
+
+\paragraph{Throughput} 
+The cumulative success rate over episodes:
+\begin{equation}
+\text{Throughput}_t = \frac{\sum_{i=1}^{t} \mathbf{1}_{\{\text{goal reached in episode } i\}}}{t}
+\end{equation}
+where $\mathbf{1}_{\{\cdot\}}$ is the indicator function that equals 1 if the condition is true and 0 otherwise.
+
+\paragraph{Real Return}
+The sum of \emph{original} (unshaped) rewards per episode, ensuring shaped rewards don't artificially inflate performance metrics.
+
+All experiments use 20 independent runs with 10,000 episodes each to compute 95\% confidence intervals.
+
+\subsection{Hyperparameter Selection}
+\label{subsec:hyperparameter_selection}
+
+The optimized hyperparameters in Table~\ref{tab:hyperparams} were selected through a systematic grid search process. For each algorithm-shaping combination, we performed preliminary experiments varying:
+\begin{itemize}
+    \item $\varepsilon \in \{0.05, 0.1, 0.2, 0.3, 0.5\}$ for exploration rate
+    \item $\alpha \in \{0.05, 0.1, 0.2, 0.3, 0.5\}$ for learning rate
+    \item $\beta \in \{0.01, 0.02, 0.05, 0.1, 0.5, 1.0\}$ for shaping strength (where applicable)
+    \item $c \in \{-0.001, -0.005, -0.01, -0.02\}$ for step cost (where applicable)
+\end{itemize}
+
+Each configuration was evaluated over 5 runs of 5,000 episodes, and we selected the parameters yielding the highest average throughput in the final 500 episodes. The sensitivity analyses in Section~4 provide deeper insight into how these parameters affect performance. Key observations from the selection process:
+
+\begin{itemize}
+    \item \textbf{SARSA prefers higher $\alpha$} (0.2 vs MC's 0.05): Online updates benefit from faster incorporation of new information.
+    \item \textbf{Lower $\varepsilon$ generally works better}: The environment's 30\% slippage provides inherent exploration, reducing the need for explicit random actions.
+    \item \textbf{Shaping strength ($\beta$) varies by method}: Safety shaping works with small $\beta=0.05$ (subtle guidance), while distance-based shaping requires stronger $\beta=0.5$--$1.0$ to overcome sparse rewards.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Optimized hyperparameters used for key methods (selected via grid search as described in Section~\ref{subsec:hyperparameter_selection})}
+\label{tab:hyperparams}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & $\varepsilon$ & $\alpha$ & \textbf{Other Parameters} \\ \midrule
+MC\_baseline & 0.05 & 0.05 & - \\
+MC\_exploration & 0.1 & 0.05 & $\beta=0.05$ \\
+MC\_potential & 0.05 & 0.05 & $\beta=0.5$ \\
+MC\_safety & 0.05 & 0.05 & $\beta=0.05$ \\
+MC\_step & 0.05 & 0.05 & $c=-0.01$ \\
+\midrule
+SARSA\_baseline & 0.1 & 0.2 & - \\
+SARSA\_exploration & 0.05 & 0.2 & $\beta=0.02$ \\
+SARSA\_potential & 0.05 & 0.1 & $\beta=1.0$ \\
+SARSA\_safety & 0.05 & 0.2 & $\beta=0.05$ \\
+SARSA\_step & 0.1 & 0.2 & $c=-0.005$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results}
+
+\subsection{Monte Carlo: Shaping Method Comparison}
+
+Figure~\ref{fig:mc_all_methods} shows the performance of all shaping methods with Monte Carlo.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{mc_all_methods_throughput.png}
+\caption{Monte Carlo: Throughput comparison across all shaping methods (mean ± 95\% CI, 20 runs, 10,000 episodes).}
+\label{fig:mc_all_methods}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Monte Carlo: Final performance summary (last 100 episodes)}
+\label{tab:mc_results}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Method} & \textbf{Throughput} & \textbf{Avg Return} \\ \midrule
+Safety-Based Shaping (Custom) & \textbf{47.71\% ± 5.76\%} & \textbf{0.400 ± 0.490} \\
+Baseline (No Shaping) & 44.30\% ± 5.36\% & 0.600 ± 0.477 \\
+Potential-Based Shaping & 43.60\% ± 4.32\% & 0.400 ± 0.490 \\
+Exploration Bonus (Custom) & 29.18\% ± 2.11\% & 0.450 ± 0.497 \\
+Step-Cost Shaping & 15.47\% ± 16.67\% & 0.200 ± 0.400 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key Findings:}
+\begin{itemize}
+    \item \textbf{Safety-based shaping} achieves the best throughput (47.71\%), providing +7.7\% improvement over baseline.
+    \item \textbf{Baseline} performs well (44.30\%), suggesting MC can learn effectively without shaping given sufficient episodes.
+    \item \textbf{Step-cost shaping fails dramatically} (15.47\%). The constant penalty overwhelms the sparse goal reward, causing the agent to minimize episode length by falling into holes early.
+    \item \textbf{Exploration bonus} underperforms (29.18\%)---likely because the novelty bonus competes with goal-seeking behavior.
+\end{itemize}
+
+\subsection{SARSA: Shaping Method Comparison}
+
+Figure~\ref{fig:sarsa_all_methods} shows SARSA's performance across all shaping methods.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{sarsa_all_methods_throughput.png}
+\caption{SARSA: Throughput comparison across all shaping methods (mean ± 95\% CI, 20 runs, 10,000 episodes).}
+\label{fig:sarsa_all_methods}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{SARSA: Final performance summary (last 100 episodes)}
+\label{tab:sarsa_results}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Method} & \textbf{Throughput} & \textbf{Avg Return} \\ \midrule
+Safety-Based Shaping (Custom) & \textbf{71.46\% ± 2.74\%} & \textbf{0.650 ± 0.477} \\
+Potential-Based Shaping & 59.32\% ± 6.68\% & 0.850 ± 0.357 \\
+Exploration Bonus (Custom) & 57.81\% ± 0.89\% & 0.400 ± 0.490 \\
+Baseline (No Shaping) & 50.29\% ± 5.90\% & 0.800 ± 0.400 \\
+Step-Cost Shaping & 30.10\% ± 14.13\% & 0.650 ± 0.477 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key Findings:}
+\begin{itemize}
+    \item \textbf{Safety-based shaping dominates} with 71.46\% throughput---a +42.1\% improvement over baseline.
+    \item \textbf{SARSA benefits far more from shaping than MC}: The online nature of SARSA allows it to incorporate shaping signals incrementally.
+    \item \textbf{SARSA baseline} (50.29\%) outperforms \emph{all} Monte Carlo variants---demonstrating on-policy TD learning's superiority in stochastic environments.
+    \item \textbf{All methods show smoother curves} than MC, reflecting SARSA's lower variance due to bootstrapping.
+\end{itemize}
+
+\paragraph{Understanding the Variance Differences:}
+
+The confidence intervals reveal notable variance differences across methods. Step-cost shaping exhibits extremely high variance (±16.67\% for MC, ±14.13\% for SARSA) because its performance is highly sensitive to the specific hole configuration and early learning trajectory---some runs discover viable paths despite the penalty, while others converge to hole-seeking behavior early and never recover. In contrast, exploration bonus shows remarkably low variance (±2.11\% for MC, ±0.89\% for SARSA) because the count-based bonus creates consistent exploration patterns across runs, leading to similar learning trajectories regardless of random initialization.
+
+The baseline and potential-based methods show moderate variance (±4--6\%), reflecting the natural stochasticity in learning from sparse rewards. Safety-based shaping maintains moderate variance while achieving high performance, suggesting it provides reliable guidance without over-constraining the learning process.
+
+\subsection{Monte Carlo vs SARSA: Best Methods}
+
+Figure~\ref{fig:best_comparison} compares the best-performing variant of each algorithm.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{final_mc_vs_sarsa_throughput.png}
+\caption{Final comparison: Best MC (Safety-Based) vs Best SARSA (Safety-Based) throughput.}
+\label{fig:best_comparison}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Best MC vs Best SARSA: Final comparison}
+\label{tab:best_comparison}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Algorithm} & \textbf{Throughput} & \textbf{Avg Return} \\ \midrule
+SARSA + Safety-Based Shaping & \textbf{71.46\% ± 2.74\%} & \textbf{0.650 ± 0.477} \\
+MC + Safety-Based Shaping & 47.71\% ± 5.76\% & 0.400 ± 0.490 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{SARSA outperforms MC by +49.8\%} (71.46\% vs 47.71\%). This dramatic difference is explained by:
+\begin{itemize}
+    \item \textbf{Faster credit assignment:} SARSA updates Q-values after every step, while MC must wait for episode completion. \emph{Credit assignment} refers to the problem of determining which actions in a sequence were responsible for the eventual outcome. When an agent reaches the goal after 20 steps, which of those steps deserves ``credit'' for the success? SARSA addresses this incrementally---each step immediately updates the preceding state-action value. MC, however, must wait until the episode ends and then propagate the same return to all visited state-action pairs, making it harder to isolate which actions truly contributed to success.
+    \item \textbf{Better handling of stochasticity:} Bootstrapping in SARSA smooths out the high variance from the 0.7 success rate.
+    \item \textbf{More effective shaping integration:} Step-level updates allow SARSA to incorporate safety signals continuously.
+\end{itemize}
+
+\subsection{Policy Visualization}
+
+Figure~\ref{fig:policy_comparison} shows the learned policies for the best methods.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{best_policies_comparison.png}
+\caption{Learned policies: MC Safety (left) shows negative Q-values and uncertainty; SARSA Safety (right) shows confident, all-positive Q-values (0.41-1.06) with clearer value gradients toward the goal.}
+\label{fig:policy_comparison}
+\end{figure}
+
+The SARSA policy demonstrates significantly higher and more confident value estimates throughout the grid. All Q-values are positive (0.41-1.06), indicating better value function quality compared to MC's range (-0.11 to 1.01 with several negative values). Both policies successfully navigate to the goal while avoiding holes, but SARSA's stronger value gradients suggest more reliable policy execution.
+
+\section{Hyperparameter Sensitivity Analysis}
+
+\subsection{Epsilon ($\epsilon$) Sensitivity}
+
+We varied the exploration rate $\epsilon \in \{0.05, 0.2, 0.5\}$ while fixing $\alpha = 0.1$ for SARSA with safety-based shaping.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{epsilon_sensitivity_throughput.png}
+\caption{SARSA + Safety: Epsilon sensitivity on throughput (mean ± 95\% CI, 10 runs, 10,000 episodes).}
+\label{fig:epsilon_sensitivity}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Epsilon sensitivity results (SARSA + Safety)}
+\label{tab:epsilon_results}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Epsilon ($\epsilon$)} & \textbf{Throughput (last 100)} & \textbf{Avg Return (last 100)} \\ \midrule
+0.05 & \textbf{48.79\% ± 2.16\%} & \textbf{0.556 ± 0.497} \\
+0.2 & 37.89\% ± 3.87\% & 0.390 ± 0.488 \\
+0.5 & 17.98\% ± 0.57\% & 0.184 ± 0.387 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{$\epsilon = 0.05$ is optimal} (48.79\% throughput), balancing exploration and exploitation.
+    \item \textbf{$\epsilon = 0.2$} shows degradation: 22\% relative decrease.
+    \item \textbf{$\epsilon = 0.5$ (excessive exploration)} performs worst (17.98\%). Too much random action selection prevents convergence.
+\end{itemize}
+
+\textbf{Exploration-Exploitation Tradeoff:} This demonstrates the fundamental RL dilemma. The environment's 70\% success rate provides inherent exploration through slippage. With $\epsilon=0.05$, effective randomness is $\sim$33\% (0.05 + 0.3(0.95)), sufficient for discovery without preventing convergence. Higher $\epsilon$ values compound this randomness excessively.
+
+\subsection{Alpha ($\alpha$) Sensitivity}
+
+We varied the learning rate $\alpha \in \{0.05, 0.2, 0.5\}$ while fixing $\epsilon = 0.1$ for SARSA with safety-based shaping.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{alpha_sensitivity_throughput.png}
+\caption{SARSA + Safety: Alpha sensitivity on throughput (mean ± 95\% CI, 10 runs, 10,000 episodes).}
+\label{fig:alpha_sensitivity}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Alpha sensitivity results (SARSA + Safety)}
+\label{tab:alpha_results}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Alpha ($\alpha$)} & \textbf{Throughput (last 100)} & \textbf{Avg Return (last 100)} \\ \midrule
+0.2 & \textbf{70.89\% ± 3.54\%} & \textbf{0.746 ± 0.435} \\
+0.5 & 58.68\% ± 0.65\% & 0.611 ± 0.488 \\
+0.05 & 48.79\% ± 2.16\% & 0.556 ± 0.497 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{$\alpha = 0.2$ achieves best throughput} (70.89\%), enabling fast adaptation to new information while maintaining stability.
+    \item \textbf{$\alpha = 0.05$ (slow learning)} performs poorly (48.79\%)---too slow to incorporate new information in the stochastic environment.
+    \item \textbf{$\alpha = 0.5$ (fast learning)} shows reduced performance (58.68\%) and higher variance due to overshooting in Q-value estimates.
+\end{itemize}
+
+The optimal $\alpha=0.2$ strikes a balance between incorporating new information quickly (important in stochastic environments) and maintaining stability.
+
+\subsection{Beta ($\beta$) Sensitivity: Potential-Based Shaping}
+
+We compared $\beta \in \{0.7, 1.0\}$ for potential-based distance shaping.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{mc_beta_comparison_throughput.png}
+    \caption{Monte Carlo}
+\end{subfigure}
+\begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{sarsa_beta_comparison_throughput.png}
+    \caption{SARSA}
+\end{subfigure}
+\caption{Beta sensitivity for potential-based shaping: $\beta = 0.7$ vs $\beta = 1.0$ (mean ± 95\% CI).}
+\label{fig:beta_sensitivity}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Beta sensitivity results for potential-based shaping}
+\label{tab:beta_results}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Algorithm} & \textbf{Beta ($\beta$)} & \textbf{Throughput (last 100)} & \textbf{Avg Return (last 100)} \\ \midrule
+\multirow{2}{*}{Monte Carlo} 
+    & 1.0 & \textbf{43.34\% ± 6.75\%} & 0.495 ± 0.500 \\
+    & 0.7 & 39.96\% ± 8.31\% & 0.520 ± 0.500 \\ \midrule
+\multirow{2}{*}{SARSA} 
+    & 1.0 & \textbf{59.23\% ± 6.61\%} & 0.775 ± 0.418 \\
+    & 0.7 & 59.18\% ± 6.43\% & 0.758 ± 0.428 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{MC is sensitive to $\beta$}: $\beta=1.0$ outperforms $\beta=0.7$ by +8.4\%, suggesting MC benefits from full-strength distance guidance.
+    \item \textbf{SARSA is robust to $\beta$}: Only 0.1\% difference between values, indicating SARSA's online learning already provides sufficient guidance.
+    \item These results reinforce that hyperparameter effects are algorithm-dependent.
+\end{itemize}
+
+\section{Discussion}
+
+\subsection{Which Shaping Helped Most in Early Learning?}
+
+\textbf{Safety-based shaping} provided the fastest early learning for both algorithms. SARSA reached $\sim$50\% throughput by episode 1000 and $\sim$65\% by episode 3000, demonstrating rapid initial learning. MC showed slower but consistent improvement with safety shaping pulling ahead after $\sim$2000 episodes.
+
+The immediate effectiveness stems from safety shaping's focus on avoiding holes, which provides actionable guidance that helps agents discover viable policies quickly in the stochastic environment.
+
+\subsection{Which Shaping Preserved Final Optimal Behaviour?}
+
+\textbf{Safety-based shaping} achieved the highest final throughput for both algorithms (71.46\% for SARSA, 47.71\% for MC), suggesting it not only accelerates early learning but also leads to better final policies.
+
+\textbf{Potential-based distance shaping} also improved over baseline for both algorithms:
+\begin{itemize}
+    \item SARSA: 59.32\% (potential) vs 50.29\% (baseline) --- \textbf{+18.0\% improvement}
+    \item MC: 43.60\% (potential) vs 44.30\% (baseline) --- roughly comparable performance
+\end{itemize}
+
+This demonstrates that potential-based shaping \emph{does help}, particularly for SARSA where it provides meaningful improvement over the unguided baseline. However, safety-based shaping outperformed all other methods, including potential-based shaping, because it incorporates domain-specific knowledge about hazard avoidance rather than just goal direction.
+
+\subsection{Why Different Shaping Methods Vary in Effectiveness}
+
+Potential-based shaping is theoretically policy-invariant: $Q^*(s,a) = Q_{\text{shaped}}^*(s,a) - \Phi(s)$. However, our results reveal nuanced practical differences:
+
+\textbf{For Monte Carlo:} The dense feedback from distance-based shaping may interfere with MC's episodic credit assignment. MC updates all visited states after episode completion; conflicting signals throughout the episode may add noise to value estimates. This explains why MC shows minimal benefit from potential-based shaping (43.60\% vs 44.30\% baseline).
+
+\textbf{For SARSA:} Online updates better leverage dense feedback, allowing SARSA to benefit substantially from potential-based shaping (+18.0\% over baseline). However, safety-based shaping still outperforms significantly (71.46\% vs 59.32\%) because it provides more relevant guidance for this specific environment.
+
+\textbf{Key Insight:} Policy invariance guarantees that the optimal policy is preserved, but does \emph{not} guarantee faster learning or that the algorithm will efficiently discover that optimal policy. The \emph{quality} of the potential function matters enormously---safety-based shaping provides more actionable guidance than pure distance-based shaping in an environment where avoiding hazards is critical.
+
+\subsection{Surprising Results and Failure Cases}
+
+\paragraph{1. Step-Cost Shaping Failure}
+Most surprising: step-cost dramatically hurt both algorithms (MC: 15.47\%, SARSA: 30.10\%). In stochastic FrozenLake where slippage causes many steps, the accumulating negative reward: (a) makes all states appear negative, reducing contrast, (b) encourages premature termination, (c) creates difficult-to-optimize value functions.
+
+\paragraph{2. SARSA Baseline Outperforms All MC Methods}
+SARSA baseline (50.29\%) exceeded even the best MC method (47.71\% with safety shaping). This demonstrates: (a) on-policy updates learning directly from stochastic exploration, (b) online updates enabling faster adaptation, (c) bootstrapping better handling 70\% success rate dynamics.
+
+\paragraph{3. Exploration Bonus Underperformance for MC}
+Exploration bonus achieved only 29.18\% for MC despite intuitive appeal. Possible reasons: MC already explores extensively through $\varepsilon$-greedy episode generation; novelty bonus may interfere with value estimation by making frequently-visited goal-adjacent states less attractive.
+
+\subsection{Exploration vs Exploitation in This Project}
+
+We encountered the exploration-exploitation tradeoff in multiple contexts:
+
+\paragraph{1. Epsilon Selection:}
+Our sensitivity study revealed $\varepsilon=0.05$ substantially outperformed $\varepsilon=0.2$ and $\varepsilon=0.5$, demonstrating the classic dilemma:
+\begin{itemize}
+    \item Too much exploration ($\varepsilon=0.5$): Throughput drops to 17.98\%
+    \item Optimal balance ($\varepsilon=0.05$): 48.79\% throughput
+    \item The environment's 70\% success rate provides ``free exploration'' through slippage
+\end{itemize}
+
+\paragraph{2. Reward Shaping as Exploration Guidance:}
+\begin{itemize}
+    \item Exploration bonus attempted explicit exploration encouragement but hurt MC (29.18\%)
+    \item Safety-based shaping provided \emph{directed exploration} toward promising regions—more sample-efficient than random exploration
+\end{itemize}
+
+\paragraph{3. Ideas to Solve the Tradeoff:}
+\begin{enumerate}
+    \item \textbf{Decaying epsilon:} $\varepsilon(t) = \max(\varepsilon_{\min}, \varepsilon_0 \cdot \text{decay}^t)$—start high for discovery, decay for exploitation.
+    \item \textbf{Optimistic initialization:} Initialize $Q(s,a) > 0$ to encourage exploration of unvisited states.
+    \item \textbf{UCB action selection:} $a = \arg\max_a [Q(s,a) + c\sqrt{\ln(n)/n(s,a)}]$—systematically explores less-visited actions.
+    \item \textbf{Reward shaping for directed exploration:} Safety-based shaping solved exploration by guiding toward promising regions.
+\end{enumerate}
+
+\textbf{What Actually Worked:} Low $\varepsilon$ (0.05) + environment stochasticity + safety-based guidance. In stochastic environments, \emph{less explicit exploration + smart guidance} outperforms \emph{heavy exploration strategies}.
+
+\section{Summary of Findings}
+
+\begin{enumerate}
+    \item \textbf{SARSA + Safety-Based Shaping is optimal:} Achieved 71.46\% throughput, outperforming all other configurations.
+    
+    \item \textbf{Reward shaping effectiveness is algorithm-dependent:} Safety shaping provided +42.1\% improvement for SARSA but only +7.7\% for MC (relative to respective baselines).
+    
+    \item \textbf{SARSA dominates Monte Carlo:} Even SARSA baseline (50.29\%) exceeded best MC variant (47.71\%), demonstrating on-policy TD learning's superiority in stochastic environments.
+    
+    \item \textbf{Hyperparameters critical:} Optimal values $\varepsilon=0.05$, $\alpha=0.2$ for SARSA+Safety. Low epsilon outperformed high epsilon by 171\%.
+    
+    \item \textbf{Stochastic environments require different strategies:} Step-cost shaping backfires; low exploration works when environment provides inherent randomness.
+\end{enumerate}
+
+\section{Conclusion}
+
+This work demonstrates that reward shaping can significantly accelerate reinforcement learning when designed with domain knowledge. Our key contributions include:
+
+\begin{enumerate}
+    \item \textbf{Novel safety-based shaping:} A potential-based method encouraging hole avoidance, achieving best performance across both algorithms.
+    
+    \item \textbf{Comprehensive comparison:} Systematic evaluation of five shaping methods across two fundamental RL algorithms.
+    
+    \item \textbf{Hyperparameter insights:} Sensitivity studies revealing optimal $\varepsilon=0.05$ and $\alpha=0.2$ for SARSA with safety shaping.
+    
+    \item \textbf{Algorithm insights:} SARSA dramatically outperforms MC in stochastic environments (71.46\% vs 47.71\%), particularly with appropriate reward shaping.
+\end{enumerate}
+
+The exploration-exploitation tradeoff remains central to RL success: neither pure exploration nor pure exploitation succeeds. Reward shaping, when designed with domain knowledge (e.g., safety in FrozenLake), can guide this balance toward faster, more reliable learning.
+
+\section*{Quick Start Guide}
+
+\subsection*{Installation}
+
+\textbf{Requirements:} Python 3.8+, 8GB RAM
+
+\begin{lstlisting}[language=bash]
+# Navigate to project directory
+cd reward-shaping-analysis
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+\end{lstlisting}
+
+\textbf{Note:} Ensure you are in the \texttt{reward-shaping-analysis} directory before running any experiments.
+
+\textbf{Core dependencies:} numpy, gymnasium, matplotlib, seaborn, pandas, tqdm, joblib, pygame, pillow
+
+\subsection*{Project Structure}
+
+\begin{lstlisting}
+reward-shaping-analysis/
+|-- algorithms/          # Monte Carlo and SARSA implementations
+|-- env/                 # FrozenLake environment and reward shaping wrappers
+|-- experiments/         # Parallel and sequential experiment runners
+|-- utils/               # Plotting, visualization, and rendering utilities
+|-- config.py            # Central configuration (all hyperparameters)
+|-- compare_methods.py              # Main comparison (sequential)
+|-- compare_methods_parallel.py     # Main comparison (parallel, faster)
+|-- hyperparameters_sweep.py        # Epsilon/Alpha sensitivity analysis
+|-- beta_comparison.py              # Beta parameter sensitivity
+|-- test_agent_rendering.py         # Policy evolution demonstration
+|-- results/             # Generated plots and visualizations
+\end{lstlisting}
+
+\subsection*{Running Experiments}
+
+\textbf{Important:} All commands must be run from the \texttt{reward-shaping-analysis} directory.
+
+\textbf{Main Experiments (in order):}
+
+\begin{lstlisting}[language=bash]
+# 1. Main comparison: All methods (MC vs SARSA, all shaping types)
+python compare_methods_parallel.py    # ~15-30 min (parallel, recommended)
+# OR
+python compare_methods.py             # ~60-90 min (sequential, for debugging)
+
+# 2. Hyperparameter sensitivity: Epsilon and Alpha
+python hyperparameters_sweep.py       # ~10-15 min
+
+# 3. Beta sensitivity: Potential-based shaping parameter
+python beta_comparison.py             # ~5-10 min
+
+# 4. Policy evolution visualization: Learning demonstration
+python test_agent_rendering.py        # ~5-10 min
+\end{lstlisting}
+
+\textbf{Note:} Use \texttt{compare\_methods\_parallel.py} for faster execution (automatically uses all CPU cores). Use \texttt{compare\_methods.py} for sequential execution (easier debugging, lower memory usage).
+
+\subsection*{Configuration}
+
+\textbf{All experimental parameters are configurable in \texttt{config.py}:}
+
+\begin{itemize}
+    \item \texttt{RANDOM\_SEED = 242} -- For reproducibility (same environment map across runs)
+    \item \texttt{TEST\_MODE = False} -- Set to \texttt{True} for quick testing (1000 episodes, 5 runs)
+    \item \texttt{FINAL\_EPISODES = 10000} -- Training episodes per run (full experiments)
+    \item \texttt{FINAL\_RUNS = 20} -- Independent runs for statistical validity
+    \item \texttt{GRID\_ROWS = 6, GRID\_COLS = 6} -- Environment size (6×6 grid)
+    \item \texttt{HOLE\_DENSITY = 0.15} -- Obstacle density (15\%)
+    \item \texttt{IS\_SLIPPERY = True} -- Stochastic dynamics
+    \item \texttt{SUCCESS\_RATE = 0.7} -- Action success probability (70\%)
+\end{itemize}
+
+\textbf{Optimized hyperparameters} (epsilon, alpha, beta) are pre-configured per algorithm and shaping method. You can modify these in \texttt{config.py} under \texttt{MC\_HYPERPARAMS} and \texttt{SARSA\_HYPERPARAMS}.
+
+\textbf{Quick Testing:} Set \texttt{TEST\_MODE = True} in \texttt{config.py} for faster experiments with reduced episodes and runs.
+
+\subsection*{Output}
+
+All results are saved to \texttt{results/} directory:
+\begin{itemize}
+    \item Throughput and returns comparison plots (with 95\% confidence intervals)
+    \item Policy visualizations with action arrows and Q-values
+    \item Statistical summaries printed to console
+    \item Animated GIF demonstrations (\texttt{results/agent\_demos/})
+\end{itemize}
+
+\begin{thebibliography}{9}
+
+\bibitem{ng1999policy}
+Ng, A. Y., Harada, D., \& Russell, S. (1999).
+\textit{Policy invariance under reward transformations: Theory and application to reward shaping}.
+ICML, Vol. 99, pp. 278-287.
+
+\bibitem{sutton2018reinforcement}
+Sutton, R. S., \& Barto, A. G. (2018).
+\textit{Reinforcement learning: An introduction} (2nd ed.).
+MIT Press.
+
+\end{thebibliography}
+
+\end{document}

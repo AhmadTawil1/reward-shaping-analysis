@@ -31,40 +31,13 @@ cfg = config.get_final_config() if not config.TEST_MODE else config.get_test_con
 hyperparams = config.get_optimized_hyperparams('SARSA', 'safety')
 shaping_params = config.get_shaping_params('safety', algorithm='SARSA')
 
-print(f"\n[1/3] Training SARSA Safety-Based agent (PARALLEL)...")
-print(f"      Running {cfg['num_runs']} parallel experiments")
-print(f"      Capturing policy snapshots at episodes: 1, 100, 1000, 10000")
-print(f"      Total episodes per run: {cfg['num_episodes']}")
+print(f"\n[1/3] Training ONE SARSA Safety-Based agent with snapshots...")
+print(f"      Capturing policy snapshots at episodes: 1, 500, 10000")
+print(f"      Total episodes: {cfg['num_episodes']}")
+print(f"      This will show how ONE agent learns over time")
 
-# Use the parallel runner to get the best agent (same as compare_methods_parallel)
-from experiments.run_sarsa_parallel import run_sarsa_parallel
-
-successes, returns, lengths, best_agent, best_env = run_sarsa_parallel(
-    num_episodes=cfg['num_episodes'],
-    num_runs=cfg['num_runs'],
-    shaping_type='safety',
-    grid_rows=cfg['grid_rows'],
-    grid_cols=cfg['grid_cols'],
-    hole_density=cfg['hole_density'],
-    is_slippery=cfg['is_slippery'],
-    success_rate=cfg['success_rate'],
-    epsilon=hyperparams['epsilon'],
-    alpha=hyperparams['alpha'],
-    gamma=cfg['gamma'],
-    initial_q_value=config.INITIAL_Q_VALUE,
-    shaping_params=shaping_params,
-    return_best_agent=True,
-    n_jobs=-1  # Use all CPU cores
-)
-
-print("\n✅ Best agent selected from parallel runs!")
-print(f"   This is the SAME agent from compare_methods_parallel.py")
-
-# Now train ONE agent with snapshots for visualization
-print(f"\n   Training a new agent to capture policy evolution snapshots...")
-
-# Create fresh environment for snapshot training
-snapshot_env = create_frozenlake_env(
+# Create environment for training
+training_env = create_frozenlake_env(
     rows=cfg['grid_rows'],
     cols=cfg['grid_cols'],
     hole_density=cfg['hole_density'],
@@ -72,12 +45,12 @@ snapshot_env = create_frozenlake_env(
     seed=config.RANDOM_SEED,
     success_rate=cfg['success_rate']
 )
-snapshot_env = SafetyBasedShaping(snapshot_env, beta=shaping_params['beta'])
-snapshot_env = MetricsWrapper(snapshot_env)
+training_env = SafetyBasedShaping(training_env, beta=shaping_params['beta'])
+training_env = MetricsWrapper(training_env)
 
-# Create agent for snapshots
-snapshot_agent = SARSAAgent(
-    env=snapshot_env,
+# Create agent
+agent = SARSAAgent(
+    env=training_env,
     epsilon=hyperparams['epsilon'],
     alpha=hyperparams['alpha'],
     gamma=cfg['gamma'],
@@ -85,29 +58,29 @@ snapshot_agent = SARSAAgent(
 )
 
 # Snapshot episodes
-snapshot_episodes = [1, 100, 1000, 10000]
+snapshot_episodes = [1, 500, 10000]
 policy_snapshots = {}
 
 # Training loop with snapshots
 print("   Training progress:")
 for episode in range(1, cfg['num_episodes'] + 1):
-    state, _ = snapshot_env.reset()
-    action = snapshot_agent.select_action(state)
+    state, _ = training_env.reset()
+    action = agent.select_action(state)
     done = False
     
     while not done:
-        next_state, reward, terminated, truncated, _ = snapshot_env.step(action)
+        next_state, reward, terminated, truncated, _ = training_env.step(action)
         done = terminated or truncated
-        next_action = snapshot_agent.select_action(next_state)
+        next_action = agent.select_action(next_state)
         
         # SARSA update
         if not done:
-            td_target = reward + cfg['gamma'] * snapshot_agent.q_table[next_state][next_action]
+            td_target = reward + cfg['gamma'] * agent.q_table[next_state][next_action]
         else:
             td_target = reward
         
-        td_error = td_target - snapshot_agent.q_table[state][action]
-        snapshot_agent.q_table[state][action] += snapshot_agent.alpha * td_error
+        td_error = td_target - agent.q_table[state][action]
+        agent.q_table[state][action] += agent.alpha * td_error
         
         state = next_state
         action = next_action
@@ -115,13 +88,13 @@ for episode in range(1, cfg['num_episodes'] + 1):
     # Capture snapshot
     if episode in snapshot_episodes:
         policy_snapshots[episode] = {
-            'policy': snapshot_agent.get_policy().copy(),
-            'value_function': snapshot_agent.get_value_function().copy()
+            'policy': agent.get_policy().copy(),
+            'value_function': agent.get_value_function().copy()
         }
         print(f"   📸 Episode {episode:5d}: Policy snapshot captured")
 
-snapshot_env.close()
-print("   ✅ Snapshot training completed!")
+training_env.close()
+print("   ✅ Training completed!")
 
 # Create results directory
 os.makedirs('results/agent_demos', exist_ok=True)
@@ -142,9 +115,12 @@ desc = temp_env.unwrapped.desc
 rows, cols = desc.shape
 temp_env.close()
 
-# Create figure with 4 subplots (2x2 grid)
-fig, axes = plt.subplots(2, 2, figsize=(cols * 5, rows * 5))
-axes = axes.flatten()
+# Create figure with 3 subplots (1 row, 3 columns)
+fig, axes = plt.subplots(1, 3, figsize=(cols * 6, rows * 2.5))
+if len(snapshot_episodes) == 1:
+    axes = [axes]
+else:
+    axes = axes.flatten()
 
 # Action mapping
 action_arrows = {
@@ -215,7 +191,7 @@ for idx, episode in enumerate(snapshot_episodes):
             if state in value_func and cell_type not in ['H']:
                 q_value = value_func[state]
                 ax.text(j + 0.5, rows - i - 0.85, f'{q_value:.2f}',
-                       ha='center', va='center', fontsize=10,
+                       ha='center', va='center', fontsize=16,
                        fontweight='bold', color='darkblue',
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
                                 edgecolor='none', alpha=0.7))
@@ -254,14 +230,14 @@ print(f"   ✅ Saved policy evolution: {evolution_path}")
 plt.show()
 plt.close()
 
-# [3/3] Create animated GIF using BEST agent from parallel runs
-print(f"\n[3/3] Creating animated GIF with BEST agent (from parallel runs)...")
-print("      → Using the same agent as compare_methods_parallel.py")
+# [3/3] Create animated GIF using the trained agent
+print(f"\n[3/3] Creating animated GIF with the trained agent...")
+print("      → Using the same agent from policy evolution")
 print("      → Using Gymnasium's rgb_array rendering")
 print("      → Recording until agent reaches goal")
 
 success, steps, attempts = create_agent_demo(
-    agent=best_agent,  # Use the BEST agent from parallel runs
+    agent=agent,  # Use the trained agent
     grid_rows=cfg['grid_rows'],
     grid_cols=cfg['grid_cols'],
     hole_density=cfg['hole_density'],
@@ -281,17 +257,17 @@ print("\nGenerated files:")
 print("  📊 Policy Evolution (Grid):")
 print("     results/agent_demos/policy_evolution.png")
 print("     → Shows how policy improves from episode 1 to 10,000")
-print("\n  🎬 Animated GIF (BEST Agent):") 
+print("\n  🎬 Animated GIF:") 
 print("     results/agent_demos/sarsa_safety_best.gif")
-print("     → Shows the BEST agent from parallel runs (same as compare_methods_parallel)")
-print(f"\n📊 Best Agent Performance:")
+print("     → Shows the trained agent's policy in action")
+print(f"\n📊 Agent Performance:")
 print(f"   Success: {'✅ YES' if success else '❌ NO'}")
 print(f"   Steps taken: {steps}")
 print(f"   Attempts needed: {attempts}")
 print("\n" + "="*70)
 print("\n💡 What you have now:")
 print("   1. Policy evolution showing learning progress (4 snapshots)")
-print("   2. Animated GIF of the BEST agent (from 20 parallel runs)")
-print("   3. Same agent quality as compare_methods_parallel.py")
+print("   2. Animated GIF of the same agent demonstrating the learned policy")
+print("   3. Consistent policy across all visualizations")
 print("   4. All using SARSA with Safety-Based reward shaping")
 print("\n" + "="*70)

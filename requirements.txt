@@ -1,0 +1,16 @@
+# Core RL and Data Science Libraries
+gymnasium==1.2.2
+numpy==2.3.5
+pandas==2.3.3
+
+# Plotting Libraries
+matplotlib==3.10.8
+seaborn==0.13.2
+
+# Utilities
+tqdm==4.67.1
+joblib==1.5.3
+
+# Rendering and Image Processing
+pygame==2.6.1
+pillow==12.0.0
